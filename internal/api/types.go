@@ -149,13 +149,19 @@ Password string `json:"password,omitempty"`
 }
 
 // CertAnalysis holds the result of a certificate analysis.
+// The fields are a superset of all possible API response fields.
 type CertAnalysis struct {
-Algorithm   string   `json:"algorithm"`
-IsCA        bool     `json:"isCA"`
-NotBefore   string   `json:"notBefore"`
-NotAfter    string   `json:"notAfter"`
-Fingerprint string   `json:"fingerprint"`
-SANs        []string `json:"subjectAltNames,omitempty"`
+Subject      string                 `json:"subject,omitempty"`
+Issuer       string                 `json:"issuer,omitempty"`
+NotBefore    string                 `json:"notBefore"`
+NotAfter     string                 `json:"notAfter"`
+SerialNumber string                 `json:"serialNumber,omitempty"`
+Algorithm    string                 `json:"algorithm"`
+IsCA         bool                   `json:"isCA"`
+Fingerprint  string                 `json:"fingerprint,omitempty"`
+PublicKey    map[string]interface{} `json:"publicKey,omitempty"`
+Extensions   map[string]string      `json:"extensions,omitempty"`
+SANs         []string               `json:"subjectAltNames,omitempty"`
 }
 
 // PrivKeyAnalysis holds the result of a private key analysis.

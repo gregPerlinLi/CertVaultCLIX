@@ -228,10 +228,12 @@ comment = ca.UUID
 }
 daysLeft := parseDaysLeft(ca.NotAfter)
 daysStr := tui.ExpiryStyle(daysLeft).Render(fmt.Sprintf("%d", daysLeft))
+caTypeStr := ca.CAType()
+caTypeColored := tui.CATypeStyle(caTypeStr).Render(caTypeStr)
 rows[i] = components.Row{
 comment,
 ca.Owner,
-ca.CAType(),
+caTypeColored,
 formatNotAfter(ca.NotAfter),
 daysStr,
 avail,

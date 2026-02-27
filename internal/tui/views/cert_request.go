@@ -48,8 +48,8 @@ fields := []*components.FormField{
 {Label: "City", Placeholder: "e.g. San Francisco"},
 {Label: "Organization", Placeholder: "e.g. Acme Corp"},
 {Label: "SANs", Placeholder: "Comma-separated: example.com,*.example.com"},
-{Label: "Algorithm", Placeholder: "RSA or ECDSA"},
-{Label: "Key Size", Placeholder: "2048 or 4096 (RSA) / 256 or 384 (ECDSA)"},
+{Label: "Algorithm", Placeholder: "RSA, EC, or ED25519"},
+{Label: "Key Size", Placeholder: "2048/4096 (RSA) • 256/384 (EC) • leave empty for ED25519"},
 {Label: "Expire Days", Placeholder: "e.g. 365"},
 {Label: "Comment", Placeholder: "Optional comment"},
 }

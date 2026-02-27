@@ -2,7 +2,9 @@ package views
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -45,7 +47,7 @@ var toolsMenuItems = []string{
 // NewTools creates a new tools view.
 func NewTools(client *api.Client) Tools {
 	ta := textarea.New()
-	ta.Placeholder = "Paste PEM/DER content here..."
+	ta.Placeholder = "Paste PEM content here (e.g. -----BEGIN CERTIFICATE-----)..."
 	ta.SetWidth(60)
 	ta.SetHeight(10)
 	return Tools{
@@ -176,16 +178,77 @@ func (t *Tools) runTool() tea.Cmd {
 
 func formatCertAnalysis(a *api.CertAnalysis) string {
 	var sb strings.Builder
-	sb.WriteString("=== Certificate Analysis ===\n\n")
-	sb.WriteString("Algorithm: " + a.Algorithm + "\n")
-	sb.WriteString("Is CA: " + boolStr(a.IsCA) + "\n")
-	sb.WriteString("Not Before: " + a.NotBefore + "\n")
-	sb.WriteString("Not After: " + a.NotAfter + "\n")
-	sb.WriteString("Fingerprint: " + a.Fingerprint + "\n")
-	if len(a.SANs) > 0 {
-		sb.WriteString("SANs: " + strings.Join(a.SANs, ", ") + "\n")
+	sb.WriteString("Certificate Analysis\n\n")
+
+	if a.Subject != "" {
+		sb.WriteString(formatAnalysisField("Subject", a.Subject))
 	}
+	if a.Issuer != "" {
+		sb.WriteString(formatAnalysisField("Issuer", a.Issuer))
+	}
+	sb.WriteString(formatAnalysisField("Not Before", a.NotBefore))
+	sb.WriteString(formatAnalysisField("Not After", a.NotAfter))
+	if a.SerialNumber != "" {
+		sb.WriteString(formatAnalysisField("Serial Number", a.SerialNumber))
+	}
+	if a.Fingerprint != "" {
+		sb.WriteString(formatAnalysisField("Fingerprint", a.Fingerprint))
+	}
+	sb.WriteString(formatAnalysisField("Is CA", boolStr(a.IsCA)))
+	sb.WriteString("\n")
+
+	// Public Key section
+	sb.WriteString("Public Key\n\n")
+	sb.WriteString(formatAnalysisField("Algorithm", a.Algorithm))
+	if len(a.PublicKey) > 0 {
+		keys := make([]string, 0, len(a.PublicKey))
+		for k := range a.PublicKey {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			v := a.PublicKey[k]
+			var vStr string
+			switch val := v.(type) {
+			case string:
+				vStr = val
+			case float64:
+				vStr = fmt.Sprintf("%.0f", val)
+			case bool:
+				vStr = boolStr(val)
+			default:
+				b, _ := json.Marshal(v)
+				vStr = string(b)
+			}
+			sb.WriteString(formatAnalysisField(k, vStr))
+		}
+	}
+	sb.WriteString("\n")
+
+	// Extensions
+	if len(a.Extensions) > 0 {
+		sb.WriteString("Extensions\n\n")
+		extKeys := make([]string, 0, len(a.Extensions))
+		for k := range a.Extensions {
+			extKeys = append(extKeys, k)
+		}
+		sort.Strings(extKeys)
+		for _, k := range extKeys {
+			sb.WriteString(formatAnalysisField(k, a.Extensions[k]))
+		}
+		sb.WriteString("\n")
+	} else if len(a.SANs) > 0 {
+		sb.WriteString("Extensions\n\n")
+		sb.WriteString(formatAnalysisField("2.5.29.17", "SAN: "+strings.Join(a.SANs, ", ")))
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
+}
+
+// formatAnalysisField formats a key-value pair with consistent alignment.
+func formatAnalysisField(key, value string) string {
+	return fmt.Sprintf("%-22s%s\n", key+":", value)
 }
 
 func formatPrivKeyAnalysis(a *api.PrivKeyAnalysis) string {

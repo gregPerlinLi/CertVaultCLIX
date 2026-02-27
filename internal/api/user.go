@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 )
 
@@ -181,8 +182,10 @@ func (c *Client) UpdateSSLCertComment(ctx context.Context, uuid, comment string)
 }
 
 // AnalyzeCert analyzes a PEM certificate.
+// The API expects the PEM content to be base64-encoded before sending.
 func (c *Client) AnalyzeCert(ctx context.Context, pem string) (*CertAnalysis, error) {
-	resp, err := c.post(ctx, "/api/v1/user/cert/analyze", AnalyzeCertRequest{Cert: pem})
+	encoded := base64.StdEncoding.EncodeToString([]byte(pem))
+	resp, err := c.post(ctx, "/api/v1/user/cert/analyze", AnalyzeCertRequest{Cert: encoded})
 	if err != nil {
 		return nil, fmt.Errorf("analyze cert: %w", err)
 	}
@@ -194,8 +197,10 @@ func (c *Client) AnalyzeCert(ctx context.Context, pem string) (*CertAnalysis, er
 }
 
 // AnalyzePrivKey analyzes a private key.
+// The API expects the PEM content to be base64-encoded before sending.
 func (c *Client) AnalyzePrivKey(ctx context.Context, privKey, password string) (*PrivKeyAnalysis, error) {
-	resp, err := c.post(ctx, "/api/v1/user/cert/privkey/analyze", AnalyzePrivKeyRequest{PrivKey: privKey, Password: password})
+	encoded := base64.StdEncoding.EncodeToString([]byte(privKey))
+	resp, err := c.post(ctx, "/api/v1/user/cert/privkey/analyze", AnalyzePrivKeyRequest{PrivKey: encoded, Password: password})
 	if err != nil {
 		return nil, fmt.Errorf("analyze privkey: %w", err)
 	}

@@ -23,6 +23,7 @@ ViewCADetail
 ViewCertList
 ViewCertDetail
 ViewCertRequest
+ViewCARequest
 ViewProfile
 ViewSessions
 ViewTools
@@ -55,6 +56,7 @@ caDetailView   *views.CADetail
 certListView   *views.CertList
 certDetailView *views.CertDetail
 certReqView    *views.CertRequest
+caReqView      *views.CARequest
 profileView    *views.Profile
 sessionsView   *views.Sessions
 toolsView      *views.Tools
@@ -112,6 +114,8 @@ _ = config.Save(a.cfg)
 a.profile = nil
 loginView := views.NewLogin(a.client, a.cfg)
 a.loginView = &loginView
+// Propagate current terminal size so centering works immediately.
+a.loginView.SetSize(a.width, a.height)
 a.view = ViewLogin
 return a.loginView.Init()
 }
@@ -277,6 +281,19 @@ a.view = ViewCertList
 return a, a.certListView.Init()
 }
 
+case ViewCARequest:
+if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
+a.view = ViewCAList
+return a, nil
+}
+if a.caReqView != nil {
+cmd = a.caReqView.Update(msg)
+}
+if m, ok := msg.(views.CARequestedMsg); ok && m.Err == nil {
+a.view = ViewCAList
+return a, a.caListView.Init()
+}
+
 case ViewProfile:
 if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
 a.view = ViewDashboard
@@ -382,6 +399,9 @@ return a.certListView.Init()
 case "cert_request":
 a.view = ViewCertRequest
 return a.certReqView.Init()
+case "ca_request":
+a.view = ViewCARequest
+return a.caReqView.Init()
 case "profile":
 a.view = ViewProfile
 return a.profileView.Init()
@@ -420,6 +440,9 @@ a.certListView = &certList
 
 certReq := views.NewCertRequest(a.client)
 a.certReqView = &certReq
+
+caReq := views.NewCARequest(a.client)
+a.caReqView = &caReq
 
 profileView := views.NewProfile(a.client, a.profile)
 a.profileView = &profileView
@@ -477,6 +500,7 @@ items := []components.SidebarItem{
 }
 
 if a.profile != nil && a.profile.Role >= 2 {
+items = append(items, components.SidebarItem{Icon: "🔒", Label: "Request CA", ID: "ca_request"})
 items = append(items, components.SidebarItem{Icon: "🔧", Label: "Admin", ID: "admin"})
 }
 if a.profile != nil && a.profile.Role >= 3 {
@@ -515,6 +539,9 @@ a.certListView.SetSize(contentWidth, contentHeight)
 }
 if a.certReqView != nil {
 a.certReqView.SetSize(contentWidth, contentHeight)
+}
+if a.caReqView != nil {
+a.caReqView.SetSize(contentWidth, contentHeight)
 }
 if a.profileView != nil {
 a.profileView.SetSize(contentWidth, contentHeight)
@@ -605,6 +632,10 @@ return a.certDetailView.View()
 case ViewCertRequest:
 if a.certReqView != nil {
 return a.certReqView.View()
+}
+case ViewCARequest:
+if a.caReqView != nil {
+return a.caReqView.View()
 }
 case ViewProfile:
 if a.profileView != nil {

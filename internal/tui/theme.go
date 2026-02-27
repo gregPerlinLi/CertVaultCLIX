@@ -44,3 +44,6 @@ var ExpiryStyle = s.ExpiryStyle
 
 // RoleStyle returns a color-coded style based on user role.
 var RoleStyle = s.RoleStyle
+
+// CATypeStyle returns a color-coded style based on CA type (Root CA / Int CA / Leaf CA).
+var CATypeStyle = s.CATypeStyle

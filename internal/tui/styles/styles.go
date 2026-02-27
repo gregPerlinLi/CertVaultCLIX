@@ -190,3 +190,16 @@ func RoleStyle(role int) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(ColorTextMuted)
 	}
 }
+
+// CATypeStyle returns a color-coded style for a CA certificate type.
+// Root CA = red (danger), Intermediate CA = yellow (warning), Leaf CA = green (success).
+func CATypeStyle(caType string) lipgloss.Style {
+switch caType {
+case "Root CA":
+return lipgloss.NewStyle().Foreground(ColorDanger).Bold(true)
+case "Int CA":
+return lipgloss.NewStyle().Foreground(ColorWarning).Bold(true)
+default: // Leaf CA
+return lipgloss.NewStyle().Foreground(ColorSuccess).Bold(true)
+}
+}
