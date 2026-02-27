@@ -28,17 +28,18 @@ const (
 
 // Tools is the certificate tools view.
 type Tools struct {
-	client      *api.Client
-	mode        ToolsMode
-	menuIdx     int
-	input       textarea.Model
-	resultVP    viewport.Model
-	hasResult   bool
-	resultFocus bool // true = result viewport has keyboard focus
-	spinner     components.Spinner
-	err         string
-	width       int
-	height      int
+	client       *api.Client
+	mode         ToolsMode
+	menuIdx      int
+	input        textarea.Model
+	resultVP     viewport.Model
+	contentWidth int // viewport usable width, set by SetSize
+	hasResult    bool
+	resultFocus  bool // true = result viewport has keyboard focus
+	spinner      components.Spinner
+	err          string
+	width        int
+	height       int
 }
 
 var toolsMenuItems = []string{
@@ -70,6 +71,10 @@ const toolsInputHeight = 6
 func (t *Tools) SetSize(width, height int) {
 	t.width = width
 	t.height = height
+	t.contentWidth = width - 2
+	if t.contentWidth < 20 {
+		t.contentWidth = 20
+	}
 	t.input.SetWidth(width - 2)
 	// Result viewport: remaining height after title (2) + subtitle (1) + input label (1) + textarea + help (2)
 	vpHeight := height - (2 + 1 + 1 + toolsInputHeight + 1 + 2)
@@ -148,6 +153,7 @@ func (t *Tools) Update(msg tea.Msg) tea.Cmd {
 				t.hasResult = false
 				t.resultFocus = false
 				t.err = ""
+				t.input.Focus()
 				return nil
 			case "up", "k", "down", "j", "pgup", "pgdown":
 				// Scroll result viewport when it has focus.
@@ -197,6 +203,7 @@ func (t *Tools) runTool() tea.Cmd {
 	content := t.input.Value()
 	mode := t.mode
 	menuIdx := t.menuIdx
+	vpWidth := t.contentWidth
 	cmd := t.spinner.Start("Processing...")
 	return tea.Batch(cmd, func() tea.Msg {
 		ctx := context.Background()
@@ -206,7 +213,7 @@ func (t *Tools) runTool() tea.Cmd {
 			if err != nil {
 				return toolResultMsg{err: err.Error()}
 			}
-			return toolResultMsg{result: formatCertAnalysis(analysis)}
+			return toolResultMsg{result: formatCertAnalysis(analysis, vpWidth)}
 		case ToolsModeAnalyzeKey:
 			analysis, err := t.client.AnalyzePrivKey(ctx, content, "")
 			if err != nil {
@@ -233,15 +240,24 @@ func (t *Tools) runTool() tea.Cmd {
 	})
 }
 
-func formatCertAnalysis(a *api.CertAnalysis) string {
+func formatCertAnalysis(a *api.CertAnalysis, maxWidth int) string {
 	sectionStyle := lipgloss.NewStyle().Foreground(tui.ColorPrimary).Bold(true)
 	keyStyle := lipgloss.NewStyle().Foreground(tui.ColorTextMuted)
 
+	const keyWidth = 19 // "Key:              " including trailing space
+	valueWidth := maxWidth - keyWidth
+	if valueWidth < 20 {
+		valueWidth = 20
+	}
+	indent := strings.Repeat(" ", keyWidth)
+
 	field := func(key, value string) string {
 		k := keyStyle.Render(fmt.Sprintf("%-18s", key+":"))
-		return k + " " + value + "\n"
+		v := wrapText(value, valueWidth, indent)
+		return k + " " + v + "\n"
 	}
-	dateField := func(key, dateStr string) string {
+	// expiryField colors only the Not After date.
+	expiryField := func(key, dateStr string) string {
 		k := keyStyle.Render(fmt.Sprintf("%-18s", key+":"))
 		daysLeft := parseDaysLeft(dateStr)
 		v := tui.ExpiryStyle(daysLeft).Render(dateStr)
@@ -258,8 +274,8 @@ func formatCertAnalysis(a *api.CertAnalysis) string {
 	if a.Issuer != "" {
 		sb.WriteString(field("Issuer", a.Issuer))
 	}
-	sb.WriteString(dateField("Not Before", a.NotBefore))
-	sb.WriteString(dateField("Not After", a.NotAfter))
+	sb.WriteString(field("Not Before", a.NotBefore))
+	sb.WriteString(expiryField("Not After", a.NotAfter))
 	if a.SerialNumber != "" {
 		sb.WriteString(field("Serial Number", a.SerialNumber))
 	}

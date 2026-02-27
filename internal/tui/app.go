@@ -158,6 +158,12 @@ if msg.String() == "?" {
 a.help.Toggle()
 return a, nil
 }
+// Logout shortcut
+if msg.String() == "L" && a.view != ViewLogin && a.logoutDialog == nil {
+d := components.NewDialog("Logout", "Are you sure you want to log out?")
+a.logoutDialog = &d
+return a, nil
+}
 // If help overlay is visible, close on any key
 if a.help.IsVisible() {
 a.help.Toggle()
@@ -226,7 +232,7 @@ return a, nil
 case "enter":
 ca := a.caListView.SelectedCA()
 if ca != nil {
-d := views.NewCADetail(ca)
+d := views.NewCADetail(ca, a.client, false)
 a.caDetailView = &d
 a.prevView = ViewCAList
 a.view = ViewCADetail
@@ -238,8 +244,15 @@ cmd = a.caListView.Update(msg)
 
 case ViewCADetail:
 if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
+if a.caDetailView != nil && a.caDetailView.IsAnalysisMode() {
+cmd = a.caDetailView.Update(msg)
+return a, cmd
+}
 a.view = a.prevView
 return a, nil
+}
+if a.caDetailView != nil {
+cmd = a.caDetailView.Update(msg)
 }
 
 case ViewCertList:
@@ -251,7 +264,7 @@ return a, nil
 case "enter":
 cert := a.certListView.SelectedCert()
 if cert != nil {
-d := views.NewCertDetail(cert)
+d := views.NewCertDetail(cert, a.client)
 a.certDetailView = &d
 a.prevView = ViewCertList
 a.view = ViewCertDetail
@@ -266,8 +279,15 @@ cmd = a.certListView.Update(msg)
 
 case ViewCertDetail:
 if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
+if a.certDetailView != nil && a.certDetailView.IsAnalysisMode() {
+cmd = a.certDetailView.Update(msg)
+return a, cmd
+}
 a.view = a.prevView
 return a, nil
+}
+if a.certDetailView != nil {
+cmd = a.certDetailView.Update(msg)
 }
 
 case ViewCertRequest:

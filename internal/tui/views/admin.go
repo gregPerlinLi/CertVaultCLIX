@@ -80,7 +80,19 @@ func (a *Admin) Init() tea.Cmd { return nil }
 
 // Update handles messages.
 func (a *Admin) Update(msg tea.Msg) tea.Cmd {
-switch msg := msg.(type) {
+	// While showing CA detail, forward everything to caDetailView.
+	// Esc from normal detail mode goes back to CA list; esc inside analysis
+	// mode is consumed by the detail view (returns to detail).
+	if a.mode == AdminModeCADetail && a.caDetailView != nil {
+		if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" && !a.caDetailView.IsAnalysisMode() {
+			a.mode = AdminModeCAs
+			a.caDetailView = nil
+			return nil
+		}
+		return a.caDetailView.Update(msg)
+	}
+
+	switch msg := msg.(type) {
 case AdminDataMsg:
 a.spinner.Stop()
 if msg.Err != nil {
@@ -136,11 +148,6 @@ a.page = 1
 cmd := a.spinner.Start("Loading...")
 return tea.Batch(cmd, a.load())
 }
-case AdminModeCADetail:
-if msg.String() == "esc" {
-a.mode = AdminModeCAs
-a.caDetailView = nil
-}
 default:
 switch msg.String() {
 case "esc":
@@ -162,7 +169,7 @@ case "enter":
 if a.mode == AdminModeCAs {
 idx := a.table.SelectedIndex()
 if idx >= 0 && idx < len(a.cas) {
-d := NewCADetail(&a.cas[idx])
+d := NewCADetail(&a.cas[idx], a.client, true)
 a.caDetailView = &d
 a.mode = AdminModeCADetail
 }
