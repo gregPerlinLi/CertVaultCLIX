@@ -22,7 +22,7 @@ const (
 
 // SuperadminDataMsg carries superadmin data.
 type SuperadminDataMsg struct {
-	Sessions []api.AllSession
+	Sessions []api.LoginRecord
 	Users    []api.AdminUser
 	Total    int64
 	Err      error
@@ -34,7 +34,7 @@ type Superadmin struct {
 	mode    SuperadminMode
 	menuIdx int
 	table   components.Table
-	sessions []api.AllSession
+	sessions []api.LoginRecord
 	users   []api.AdminUser
 	total   int64
 	page    int
@@ -55,9 +55,9 @@ var superadminMenuItems = []string{
 func NewSuperadmin(client *api.Client) Superadmin {
 	cols := []components.Column{
 		{Title: "Username", Width: 20},
-		{Title: "IP", Width: 18},
-		{Title: "User Agent", Width: 30},
-		{Title: "Login At", Width: 20},
+		{Title: "IP Address", Width: 18},
+		{Title: "Browser", Width: 22},
+		{Title: "Login At", Width: 22},
 	}
 	return Superadmin{
 		client:  client,
@@ -137,9 +137,9 @@ func (s *Superadmin) Update(msg tea.Msg) tea.Cmd {
 				} else {
 					s.table.Columns = []components.Column{
 						{Title: "Username", Width: 20},
-						{Title: "IP", Width: 18},
-						{Title: "User Agent", Width: 30},
-						{Title: "Login At", Width: 20},
+						{Title: "IP Address", Width: 18},
+						{Title: "Browser", Width: 22},
+						{Title: "Login At", Width: 22},
 					}
 				}
 				cmd := s.spinner.Start("Loading...")
@@ -216,9 +216,9 @@ func (s *Superadmin) buildSessionRows() []components.Row {
 	for i, sess := range s.sessions {
 		rows[i] = components.Row{
 			sess.Username,
-			sess.IP,
-			truncate(sess.UserAgent, 30),
-			sess.LoginAt,
+			sess.IPAddress,
+			truncate(sess.Browser, 30),
+			sess.LoginTime,
 		}
 	}
 	return rows
@@ -287,4 +287,9 @@ func (s *Superadmin) View() string {
 		sb.WriteString("\n" + s.toast.View())
 	}
 	return sb.String()
+}
+
+// IsAtRoot returns true when the Superadmin view is showing the top-level menu.
+func (s *Superadmin) IsAtRoot() bool {
+return s.mode == SuperadminModeMenu
 }

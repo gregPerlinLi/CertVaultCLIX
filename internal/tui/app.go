@@ -2,7 +2,6 @@ package tui
 
 import (
 "fmt"
-"strings"
 
 tea "github.com/charmbracelet/bubbletea"
 "github.com/charmbracelet/lipgloss"
@@ -215,12 +214,22 @@ return a, nil
 cmd = a.sessionsView.Update(msg)
 
 case ViewTools:
+if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
+if a.toolsView != nil && a.toolsView.IsAtRoot() {
+a.view = ViewDashboard
+return a, nil
+}
+}
 if a.toolsView != nil {
 cmd = a.toolsView.Update(msg)
 }
 
 case ViewAdmin:
 if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
+if a.adminView != nil && a.adminView.IsAtRoot() {
+a.view = ViewDashboard
+return a, nil
+}
 if a.adminView != nil {
 cmd = a.adminView.Update(msg)
 }
@@ -232,6 +241,10 @@ cmd = a.adminView.Update(msg)
 
 case ViewSuperadmin:
 if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
+if a.superadminView != nil && a.superadminView.IsAtRoot() {
+a.view = ViewDashboard
+return a, nil
+}
 if a.superadminView != nil {
 cmd = a.superadminView.Update(msg)
 }
@@ -378,10 +391,10 @@ items := []components.SidebarItem{
 {Icon: "🛠", Label: "Tools", ID: "tools"},
 }
 
-if a.profile != nil && a.profile.Role >= 1 {
+if a.profile != nil && a.profile.Role >= 2 {
 items = append(items, components.SidebarItem{Icon: "⚙️", Label: "Admin", ID: "admin"})
 }
-if a.profile != nil && a.profile.Role >= 2 {
+if a.profile != nil && a.profile.Role >= 3 {
 items = append(items, components.SidebarItem{Icon: "👑", Label: "Superadmin", ID: "superadmin"})
 }
 
@@ -468,12 +481,7 @@ statusBar := a.statusBar.View()
 var footer string
 if a.help.IsVisible() {
 helpView := a.help.View()
-helpWidth := lipgloss.Width(helpView)
-helpLeft := (a.width - helpWidth) / 2
-if helpLeft < 0 {
-helpLeft = 0
-}
-footer = strings.Repeat(" ", helpLeft) + helpView
+footer = lipgloss.PlaceHorizontal(a.width, lipgloss.Center, helpView)
 } else {
 footer = HelpStyle.Render("? help  q quit")
 }

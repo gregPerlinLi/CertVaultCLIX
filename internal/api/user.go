@@ -29,13 +29,13 @@ func (c *Client) UpdateProfile(ctx context.Context, req UpdateProfileRequest) er
 }
 
 // ListUserSessions lists the current user's sessions.
-func (c *Client) ListUserSessions(ctx context.Context, page, size int) (*PageDTO[Session], error) {
-	path := fmt.Sprintf("/api/v1/user/session?page=%d&size=%d", page, size)
+func (c *Client) ListUserSessions(ctx context.Context, page, size int) (*PageDTO[LoginRecord], error) {
+	path := fmt.Sprintf("/api/v1/user/session?page=%d&limit=%d", page, size)
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
-	result, err := decodeResponse[PageDTO[Session]](resp)
+	result, err := decodeResponse[PageDTO[LoginRecord]](resp)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (c *Client) LogoutAllSessions(ctx context.Context) error {
 
 // ListUserCAs lists CAs bound to the current user.
 func (c *Client) ListUserCAs(ctx context.Context, page, size int) (*PageDTO[CACert], error) {
-	path := fmt.Sprintf("/api/v1/user/cert/ca?page=%d&size=%d", page, size)
+	path := fmt.Sprintf("/api/v1/user/cert/ca?page=%d&limit=%d", page, size)
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("list user CAs: %w", err)
@@ -96,7 +96,7 @@ func (c *Client) GetUserCACert(ctx context.Context, uuid string, chain, needRoot
 
 // ListUserSSLCerts lists SSL certs belonging to the current user.
 func (c *Client) ListUserSSLCerts(ctx context.Context, page, size int) (*PageDTO[SSLCert], error) {
-	path := fmt.Sprintf("/api/v1/user/cert/ssl?page=%d&size=%d", page, size)
+	path := fmt.Sprintf("/api/v1/user/cert/ssl?page=%d&limit=%d", page, size)
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("list SSL certs: %w", err)
@@ -182,7 +182,7 @@ func (c *Client) UpdateSSLCertComment(ctx context.Context, uuid, comment string)
 
 // AnalyzeCert analyzes a PEM certificate.
 func (c *Client) AnalyzeCert(ctx context.Context, pem string) (*CertAnalysis, error) {
-	resp, err := c.post(ctx, "/api/v1/user/cert/analyze", AnalyzeCertRequest{Certificate: pem})
+	resp, err := c.post(ctx, "/api/v1/user/cert/analyze", AnalyzeCertRequest{Cert: pem})
 	if err != nil {
 		return nil, fmt.Errorf("analyze cert: %w", err)
 	}
@@ -195,7 +195,7 @@ func (c *Client) AnalyzeCert(ctx context.Context, pem string) (*CertAnalysis, er
 
 // AnalyzePrivKey analyzes a private key.
 func (c *Client) AnalyzePrivKey(ctx context.Context, privKey, password string) (*PrivKeyAnalysis, error) {
-	resp, err := c.post(ctx, "/api/v1/user/cert/privkey/analyze", AnalyzePrivKeyRequest{PrivateKey: privKey, Password: password})
+	resp, err := c.post(ctx, "/api/v1/user/cert/privkey/analyze", AnalyzePrivKeyRequest{PrivKey: privKey, Password: password})
 	if err != nil {
 		return nil, fmt.Errorf("analyze privkey: %w", err)
 	}
@@ -221,7 +221,7 @@ func (c *Client) ConvertPEMtoPFX(ctx context.Context, req ConvertPEMtoPFXRequest
 
 // ConvertPEMtoDER converts a PEM certificate to DER format.
 func (c *Client) ConvertPEMtoDER(ctx context.Context, pem string) (*ConvertResult, error) {
-	resp, err := c.post(ctx, "/api/v1/user/cert/convert/pem/to/der", ConvertPEMtoDERRequest{Certificate: pem})
+	resp, err := c.post(ctx, "/api/v1/user/cert/convert/pem/to/der", ConvertRequest{Cert: pem})
 	if err != nil {
 		return nil, fmt.Errorf("convert PEM to DER: %w", err)
 	}
@@ -234,7 +234,7 @@ func (c *Client) ConvertPEMtoDER(ctx context.Context, pem string) (*ConvertResul
 
 // ConvertDERtoPEM converts a base64-encoded DER certificate to PEM format.
 func (c *Client) ConvertDERtoPEM(ctx context.Context, der string) (*ConvertResult, error) {
-	resp, err := c.post(ctx, "/api/v1/user/cert/convert/der/to/pem", ConvertDERtoPEMRequest{Certificate: der})
+	resp, err := c.post(ctx, "/api/v1/user/cert/convert/der/to/pem", ConvertRequest{Cert: der})
 	if err != nil {
 		return nil, fmt.Errorf("convert DER to PEM: %w", err)
 	}

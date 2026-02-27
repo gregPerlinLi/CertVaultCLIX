@@ -43,7 +43,6 @@ func NewCertRequest(client *api.Client) CertRequest {
 		{Label: "Key Size", Placeholder: "2048 or 4096 (RSA) / 256 or 384 (ECDSA)"},
 		{Label: "Expire Days", Placeholder: "e.g. 365"},
 		{Label: "Comment", Placeholder: "Optional comment"},
-		{Label: "Password", Placeholder: "Private key encryption password", EchoMode: textinput.EchoPassword},
 	}
 	f := components.NewForm("📜 Request SSL Certificate", fields)
 	return CertRequest{
@@ -105,19 +104,19 @@ func (c *CertRequest) submit() tea.Cmd {
 	keySizeStr := c.form.Value(8)
 	expireDaysStr := c.form.Value(9)
 	comment := c.form.Value(10)
-	password := c.form.Value(11)
 
 	if cn == "" || caUUID == "" {
 		c.err = "CN and CA UUID are required"
 		return nil
 	}
 
-	var sans []string
+	// Build SANs list as SubjectAltName structs (DNS_NAME)
+	var sans []api.SubjectAltName
 	if sansStr != "" {
 		for _, s := range strings.Split(sansStr, ",") {
 			s = strings.TrimSpace(s)
 			if s != "" {
-				sans = append(sans, s)
+				sans = append(sans, api.SubjectAltName{Type: "DNS_NAME", Value: s})
 			}
 		}
 	}
@@ -133,18 +132,18 @@ func (c *CertRequest) submit() tea.Cmd {
 	}
 
 	req := api.RequestSSLCertRequest{
-		Algorithm:  algo,
-		KeySize:    keySize,
-		CN:         cn,
-		Country:    country,
-		Province:   province,
-		City:       city,
-		Org:        org,
-		SANs:       sans,
-		CAUuid:     caUUID,
-		ExpireDays: expireDays,
-		Comment:    comment,
-		Password:   password,
+		CaUUID:             caUUID,
+		Algorithm:          algo,
+		KeySize:            keySize,
+		CommonName:         cn,
+		Country:            country,
+		Province:           province,
+		City:               city,
+		Organization:       org,
+		OrganizationalUnit: "",
+		SubjectAltNames:    sans,
+		Expiry:             expireDays,
+		Comment:            comment,
 	}
 
 	cmd := c.spinner.Start("Requesting certificate...")

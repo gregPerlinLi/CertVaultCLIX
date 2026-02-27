@@ -135,10 +135,7 @@ var (
 
 	TableHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(ColorSecondary).
-				BorderBottom(true).
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(ColorBorder)
+				Foreground(ColorSecondary)
 
 	TableRowStyle = lipgloss.NewStyle().
 			Foreground(ColorText)

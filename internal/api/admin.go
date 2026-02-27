@@ -7,7 +7,7 @@ import (
 
 // ListAdminUsers lists all users (admin only).
 func (c *Client) ListAdminUsers(ctx context.Context, page, size int) (*PageDTO[AdminUser], error) {
-	path := fmt.Sprintf("/api/v1/admin/users?page=%d&size=%d", page, size)
+	path := fmt.Sprintf("/api/v1/admin/users?page=%d&limit=%d", page, size)
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("list admin users: %w", err)
@@ -21,7 +21,7 @@ func (c *Client) ListAdminUsers(ctx context.Context, page, size int) (*PageDTO[A
 
 // ListAdminCAs lists all CA certificates (admin only).
 func (c *Client) ListAdminCAs(ctx context.Context, page, size int) (*PageDTO[CACert], error) {
-	path := fmt.Sprintf("/api/v1/admin/cert/ca?page=%d&size=%d", page, size)
+	path := fmt.Sprintf("/api/v1/admin/cert/ca?page=%d&limit=%d", page, size)
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("list admin CAs: %w", err)

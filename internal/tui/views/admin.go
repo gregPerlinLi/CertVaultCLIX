@@ -171,14 +171,19 @@ func (a *Admin) buildUserRows() []components.Row {
 func (a *Admin) buildCARows() []components.Row {
 	rows := make([]components.Row, len(a.cas))
 	for i, ca := range a.cas {
-		avail := "✓"
+		avail := "Yes"
 		if !ca.Available {
-			avail = "✗"
+			avail = "No"
+		}
+		comment := ca.Comment
+		if comment == "" {
+			comment = ca.UUID
 		}
 		rows[i] = components.Row{
-			ca.CN,
-			ca.Algorithm,
-			ca.NotAfter.Format("2006-01-02"),
+			comment,
+			ca.Owner,
+			ca.CAType(),
+			formatNotAfter(ca.NotAfter),
 			avail,
 		}
 	}
@@ -231,4 +236,9 @@ func (a *Admin) View() string {
 		sb.WriteString("\n" + a.toast.View())
 	}
 	return sb.String()
+}
+
+// IsAtRoot returns true when the Admin view is showing the top-level menu.
+func (a *Admin) IsAtRoot() bool {
+return a.mode == AdminModeMenu
 }

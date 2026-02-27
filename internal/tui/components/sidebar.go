@@ -3,6 +3,7 @@ package components
 import (
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	st "github.com/gregPerlinLi/CertVaultCLIX/internal/tui/styles"
 )
 
@@ -82,18 +83,29 @@ func (s *Sidebar) View() string {
 	sb.WriteString(st.SidebarHeaderStyle.Render("Navigation"))
 	sb.WriteString("\n\n")
 
+	// itemWidth ensures each item fills the sidebar width for consistent highlight bar
+	itemWidth := s.width - 4 // sidebar padding(2) + border(1) + 1 margin
+	if itemWidth < 10 {
+		itemWidth = 10
+	}
+
 	for i, item := range s.Items {
 		icon := item.Icon
 		if icon == "" {
 			icon = "•"
 		}
+		// Use lipgloss.Width so we can pad narrower icons to 2 cells
+		iconCols := lipgloss.Width(icon)
+		if iconCols < 2 {
+			icon = icon + " "
+		}
 		label := icon + " " + item.Label
 
 		var line string
 		if s.focused && i == s.cursor {
-			line = st.SidebarSelectedStyle.Render(label)
+			line = st.SidebarSelectedStyle.Width(itemWidth).Render(label)
 		} else {
-			line = st.SidebarItemStyle.Render(label)
+			line = st.SidebarItemStyle.Width(itemWidth).Render(label)
 		}
 		sb.WriteString(line)
 		sb.WriteString("\n")

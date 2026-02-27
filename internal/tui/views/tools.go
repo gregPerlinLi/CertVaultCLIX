@@ -240,3 +240,8 @@ func (t *Tools) View() string {
 	sb.WriteString(tui.HelpStyle.Render("ctrl+s: run • esc: back"))
 	return sb.String()
 }
+
+// IsAtRoot returns true when the Tools view is showing the top-level menu.
+func (t *Tools) IsAtRoot() bool {
+return t.mode == ToolsModeMenu
+}

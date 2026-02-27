@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gregPerlinLi/CertVaultCLIX/internal/api"
 	tui "github.com/gregPerlinLi/CertVaultCLIX/internal/tui/styles"
 	"github.com/gregPerlinLi/CertVaultCLIX/internal/tui/components"
@@ -120,7 +121,7 @@ func (d *Dashboard) View() string {
 		tui.TitleStyle.Render(fmt.Sprintf("%d", d.stats.SSLCount)),
 	))
 
-	cards := fmt.Sprintf("%s   %s", caCard, sslCard)
+	cards := lipgloss.JoinHorizontal(lipgloss.Top, caCard, "   ", sslCard)
 	sb.WriteString(cards)
 	sb.WriteString("\n\n")
 
