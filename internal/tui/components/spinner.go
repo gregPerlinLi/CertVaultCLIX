@@ -15,10 +15,10 @@ message string
 
 // NewSpinner creates a new spinner.
 func NewSpinner() Spinner {
-s := spinner.New()
-s.Spinner = spinner.Dot
-s.Style = st.TitleStyle
-return Spinner{model: s}
+m := spinner.New()
+m.Spinner = spinner.Dot
+m.Style = st.TitleStyle
+return Spinner{model: m}
 }
 
 // Start activates the spinner with a message.
