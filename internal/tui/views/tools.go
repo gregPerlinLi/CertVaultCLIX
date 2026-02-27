@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gregPerlinLi/CertVaultCLIX/internal/api"
 	tui "github.com/gregPerlinLi/CertVaultCLIX/internal/tui/styles"
 	"github.com/gregPerlinLi/CertVaultCLIX/internal/tui/components"
@@ -26,15 +28,17 @@ const (
 
 // Tools is the certificate tools view.
 type Tools struct {
-	client   *api.Client
-	mode     ToolsMode
-	menuIdx  int
-	input    textarea.Model
-	result   string
-	spinner  components.Spinner
-	err      string
-	width    int
-	height   int
+	client      *api.Client
+	mode        ToolsMode
+	menuIdx     int
+	input       textarea.Model
+	resultVP    viewport.Model
+	hasResult   bool
+	resultFocus bool // true = result viewport has keyboard focus
+	spinner     components.Spinner
+	err         string
+	width       int
+	height      int
 }
 
 var toolsMenuItems = []string{
@@ -49,18 +53,31 @@ func NewTools(client *api.Client) Tools {
 	ta := textarea.New()
 	ta.Placeholder = "Paste PEM content here (e.g. -----BEGIN CERTIFICATE-----)..."
 	ta.SetWidth(60)
-	ta.SetHeight(10)
+	ta.SetHeight(toolsInputHeight)
+	vp := viewport.New(80, 20)
 	return Tools{
-		client:  client,
-		input:   ta,
-		spinner: components.NewSpinner(),
+		client:   client,
+		input:    ta,
+		resultVP: vp,
+		spinner:  components.NewSpinner(),
 	}
 }
+
+// toolsInputHeight is the number of lines the input textarea occupies.
+const toolsInputHeight = 6
 
 // SetSize updates dimensions.
 func (t *Tools) SetSize(width, height int) {
 	t.width = width
 	t.height = height
+	t.input.SetWidth(width - 2)
+	// Result viewport: remaining height after title (2) + subtitle (1) + input label (1) + textarea + help (2)
+	vpHeight := height - (2 + 1 + 1 + toolsInputHeight + 1 + 2)
+	if vpHeight < 4 {
+		vpHeight = 4
+	}
+	t.resultVP.Width = width
+	t.resultVP.Height = vpHeight
 }
 
 // Init initializes.
@@ -89,17 +106,20 @@ func (t *Tools) Update(msg tea.Msg) tea.Cmd {
 				case 0:
 					t.mode = ToolsModeAnalyzeCert
 					t.input.Focus()
-					t.result = ""
+					t.hasResult = false
+					t.resultFocus = false
 					t.err = ""
 				case 1:
 					t.mode = ToolsModeAnalyzeKey
 					t.input.Focus()
-					t.result = ""
+					t.hasResult = false
+					t.resultFocus = false
 					t.err = ""
 				case 2, 3:
 					t.mode = ToolsModeConvert
 					t.input.Focus()
-					t.result = ""
+					t.hasResult = false
+					t.resultFocus = false
 					t.err = ""
 				}
 			}
@@ -108,24 +128,61 @@ func (t *Tools) Update(msg tea.Msg) tea.Cmd {
 			case "esc":
 				t.mode = ToolsModeMenu
 				t.input.Blur()
-				t.result = ""
+				t.hasResult = false
+				t.resultFocus = false
 				t.err = ""
+			case "tab":
+				// Toggle focus between input and result viewport.
+				if t.hasResult {
+					t.resultFocus = !t.resultFocus
+					if t.resultFocus {
+						t.input.Blur()
+					} else {
+						t.input.Focus()
+					}
+				}
 			case "ctrl+s", "ctrl+enter":
 				return t.runTool()
 			case "ctrl+l":
-				// Clear the textarea content
 				t.input.Reset()
+				t.hasResult = false
+				t.resultFocus = false
+				t.err = ""
 				return nil
-			default:
+			case "up", "k", "down", "j", "pgup", "pgdown":
+				// Scroll result viewport when it has focus.
+				if t.resultFocus {
+					var vpCmd tea.Cmd
+					t.resultVP, vpCmd = t.resultVP.Update(msg)
+					return vpCmd
+				}
 				var cmd tea.Cmd
 				t.input, cmd = t.input.Update(msg)
 				return cmd
+			default:
+				if !t.resultFocus {
+					var cmd tea.Cmd
+					t.input, cmd = t.input.Update(msg)
+					return cmd
+				}
 			}
+		}
+	case tea.MouseMsg:
+		if t.hasResult {
+			var vpCmd tea.Cmd
+			t.resultVP, vpCmd = t.resultVP.Update(msg)
+			return vpCmd
 		}
 	case toolResultMsg:
 		t.spinner.Stop()
-		t.result = msg.result
 		t.err = msg.err
+		if msg.result != "" {
+			t.hasResult = true
+			t.resultVP.SetContent(msg.result)
+			t.resultVP.GotoTop()
+			t.resultFocus = true
+			t.input.Blur()
+		}
 		return nil
 	}
 	return t.spinner.Update(msg)
@@ -177,29 +234,45 @@ func (t *Tools) runTool() tea.Cmd {
 }
 
 func formatCertAnalysis(a *api.CertAnalysis) string {
+	sectionStyle := lipgloss.NewStyle().Foreground(tui.ColorPrimary).Bold(true)
+	keyStyle := lipgloss.NewStyle().Foreground(tui.ColorTextMuted)
+
+	field := func(key, value string) string {
+		k := keyStyle.Render(fmt.Sprintf("%-18s", key+":"))
+		return k + " " + value + "\n"
+	}
+	dateField := func(key, dateStr string) string {
+		k := keyStyle.Render(fmt.Sprintf("%-18s", key+":"))
+		daysLeft := parseDaysLeft(dateStr)
+		v := tui.ExpiryStyle(daysLeft).Render(dateStr)
+		return k + " " + v + "\n"
+	}
+
 	var sb strings.Builder
-	sb.WriteString("Certificate Analysis\n\n")
+	sb.WriteString(sectionStyle.Render("Certificate Analysis"))
+	sb.WriteString("\n\n")
 
 	if a.Subject != "" {
-		sb.WriteString(formatAnalysisField("Subject", a.Subject))
+		sb.WriteString(field("Subject", a.Subject))
 	}
 	if a.Issuer != "" {
-		sb.WriteString(formatAnalysisField("Issuer", a.Issuer))
+		sb.WriteString(field("Issuer", a.Issuer))
 	}
-	sb.WriteString(formatAnalysisField("Not Before", a.NotBefore))
-	sb.WriteString(formatAnalysisField("Not After", a.NotAfter))
+	sb.WriteString(dateField("Not Before", a.NotBefore))
+	sb.WriteString(dateField("Not After", a.NotAfter))
 	if a.SerialNumber != "" {
-		sb.WriteString(formatAnalysisField("Serial Number", a.SerialNumber))
+		sb.WriteString(field("Serial Number", a.SerialNumber))
 	}
 	if a.Fingerprint != "" {
-		sb.WriteString(formatAnalysisField("Fingerprint", a.Fingerprint))
+		sb.WriteString(field("Fingerprint", a.Fingerprint))
 	}
-	sb.WriteString(formatAnalysisField("Is CA", boolStr(a.IsCA)))
+	sb.WriteString(field("Is CA", boolStr(a.IsCA)))
 	sb.WriteString("\n")
 
 	// Public Key section
-	sb.WriteString("Public Key\n\n")
-	sb.WriteString(formatAnalysisField("Algorithm", a.Algorithm))
+	sb.WriteString(sectionStyle.Render("Public Key"))
+	sb.WriteString("\n\n")
+	sb.WriteString(field("Algorithm", a.Algorithm))
 	if len(a.PublicKey) > 0 {
 		keys := make([]string, 0, len(a.PublicKey))
 		for k := range a.PublicKey {
@@ -220,35 +293,32 @@ func formatCertAnalysis(a *api.CertAnalysis) string {
 				b, _ := json.Marshal(v)
 				vStr = string(b)
 			}
-			sb.WriteString(formatAnalysisField(k, vStr))
+			sb.WriteString(field(k, vStr))
 		}
 	}
 	sb.WriteString("\n")
 
 	// Extensions
 	if len(a.Extensions) > 0 {
-		sb.WriteString("Extensions\n\n")
+		sb.WriteString(sectionStyle.Render("Extensions"))
+		sb.WriteString("\n\n")
 		extKeys := make([]string, 0, len(a.Extensions))
 		for k := range a.Extensions {
 			extKeys = append(extKeys, k)
 		}
 		sort.Strings(extKeys)
 		for _, k := range extKeys {
-			sb.WriteString(formatAnalysisField(k, a.Extensions[k]))
+			sb.WriteString(field(k, a.Extensions[k]))
 		}
 		sb.WriteString("\n")
 	} else if len(a.SANs) > 0 {
-		sb.WriteString("Extensions\n\n")
-		sb.WriteString(formatAnalysisField("2.5.29.17", "SAN: "+strings.Join(a.SANs, ", ")))
+		sb.WriteString(sectionStyle.Render("Extensions"))
+		sb.WriteString("\n\n")
+		sb.WriteString(field("2.5.29.17", "SAN: "+strings.Join(a.SANs, ", ")))
 		sb.WriteString("\n")
 	}
 
 	return sb.String()
-}
-
-// formatAnalysisField formats a key-value pair with consistent alignment.
-func formatAnalysisField(key, value string) string {
-	return fmt.Sprintf("%-22s%s\n", key+":", value)
 }
 
 func formatPrivKeyAnalysis(a *api.PrivKeyAnalysis) string {
@@ -287,24 +357,44 @@ func (t *Tools) View() string {
 	}
 
 	sb.WriteString(tui.SubtitleStyle.Render(toolsMenuItems[t.menuIdx]))
-	sb.WriteString("\n\n")
-	sb.WriteString(tui.NormalStyle.Render("Input:"))
+	sb.WriteString("\n")
+
+	// Input area
+	inputLabel := "Input:"
+	if t.resultFocus {
+		inputLabel = tui.MutedStyle.Render("Input: [tab: edit]")
+	}
+	sb.WriteString(inputLabel)
 	sb.WriteString("\n")
 	sb.WriteString(t.input.View())
-	sb.WriteString("\n\n")
+	sb.WriteString("\n")
 
+	// Spinner / error / result viewport
 	if t.spinner.IsActive() {
 		sb.WriteString(t.spinner.View())
-	} else if t.result != "" {
-		sb.WriteString(tui.SuccessStyle.Render("Result:"))
 		sb.WriteString("\n")
-		sb.WriteString(tui.BorderStyle.Render(t.result))
+	} else if t.hasResult {
+		focusHint := ""
+		if !t.resultFocus {
+			focusHint = tui.MutedStyle.Render(" [tab: scroll]")
+		}
+		sb.WriteString(tui.SuccessStyle.Render("Result:") + focusHint + "\n")
+		sb.WriteString(t.resultVP.View())
+		if t.resultVP.TotalLineCount() > t.resultVP.Height {
+			pct := int(t.resultVP.ScrollPercent() * 100)
+			sb.WriteString(tui.MutedStyle.Render(fmt.Sprintf(" %d%%", pct)))
+		}
+		sb.WriteString("\n")
 	} else if t.err != "" {
 		sb.WriteString(tui.DangerStyle.Render("Error: " + t.err))
+		sb.WriteString("\n")
 	}
 
-	sb.WriteString("\n\n")
-	sb.WriteString(tui.HelpStyle.Render("ctrl+s: run • ctrl+l: clear • esc: back"))
+	helpStr := "ctrl+s: run • ctrl+l: clear • esc: back"
+	if t.hasResult && t.resultFocus {
+		helpStr = "↑/↓: scroll • tab: edit input • ctrl+l: clear • esc: back"
+	}
+	sb.WriteString(tui.HelpStyle.Render(helpStr))
 	return sb.String()
 }
 

@@ -55,7 +55,7 @@ available = "Yes"
 rows := []struct{ label, value string }{
 {"UUID", ca.UUID},
 {"Owner", ca.Owner},
-{"Type", ca.CAType()},
+{"Type", tui.CATypeStyle(ca.CAType()).Render(ca.CAType())},
 {"Parent CA UUID", ca.ParentCa},
 {"Valid From", ca.NotBefore},
 {"Valid Until", expStyle.Render(ca.NotAfter) + fmt.Sprintf("  (%d days)", daysLeft)},
