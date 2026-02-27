@@ -100,12 +100,12 @@ switch msg.String() {
 case "r", "f5":
 cmd := c.spinner.Start("Refreshing...")
 return tea.Batch(cmd, c.load())
-case "pgup":
+case "[":
 if c.page > 1 {
 c.page--
 return c.load()
 }
-case "pgdown":
+case "]":
 if int64(c.page*20) < c.total {
 c.page++
 return c.load()
@@ -161,7 +161,7 @@ sb.WriteString(tui.MutedStyle.Render(total))
 sb.WriteString("\n")
 sb.WriteString(c.table.View())
 sb.WriteString("\n")
-sb.WriteString(tui.HelpStyle.Render("enter: details • r: refresh • PgUp/PgDn: page"))
+sb.WriteString(tui.HelpStyle.Render("enter: details • r: refresh • [/]: prev/next page"))
 
 if c.toast.IsVisible() {
 sb.WriteString("\n" + c.toast.View())

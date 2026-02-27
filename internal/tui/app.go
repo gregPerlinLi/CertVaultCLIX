@@ -1,6 +1,7 @@
 package tui
 
 import (
+"context"
 "fmt"
 
 tea "github.com/charmbracelet/bubbletea"
@@ -63,7 +64,7 @@ settingsView   *views.Settings
 
 // NewApp creates a new App.
 func NewApp(client *api.Client, cfg *config.Config) *App {
-loginView := views.NewLogin(client)
+loginView := views.NewLogin(client, cfg)
 return &App{
 client:    client,
 cfg:       cfg,
@@ -75,7 +76,21 @@ help:      components.NewHelp(components.DefaultEntries()),
 
 // Init starts the application.
 func (a *App) Init() tea.Cmd {
+if a.cfg != nil && a.cfg.Session != "" {
+return tea.Batch(a.loginView.Init(), a.tryAutoLogin())
+}
 return a.loginView.Init()
+}
+
+// tryAutoLogin attempts to restore a saved session without re-entering credentials.
+func (a *App) tryAutoLogin() tea.Cmd {
+return func() tea.Msg {
+profile, err := a.client.GetProfile(context.Background())
+if err != nil {
+return nil // session invalid; stay on login screen
+}
+return views.LoginSuccessMsg{Profile: profile}
+}
 }
 
 // Update handles all messages.
@@ -89,12 +104,27 @@ a.updateSizes()
 return a, nil
 
 case tea.KeyMsg:
-// Global quit
+// Global quit: ctrl+c always; 'q' only when not editing text
 if msg.String() == "ctrl+c" {
 return a, tea.Quit
 }
-if msg.String() == "q" && a.view == ViewLogin {
+if msg.String() == "q" {
+switch a.view {
+case ViewLogin, ViewDashboard, ViewCAList, ViewCADetail, ViewCertList, ViewCertDetail, ViewSessions:
 return a, tea.Quit
+case ViewTools:
+if a.toolsView != nil && a.toolsView.IsAtRoot() {
+return a, tea.Quit
+}
+case ViewAdmin:
+if a.adminView != nil && a.adminView.IsAtRoot() {
+return a, tea.Quit
+}
+case ViewSuperadmin:
+if a.superadminView != nil && a.superadminView.IsAtRoot() {
+return a, tea.Quit
+}
+}
 }
 // Toggle help
 if msg.String() == "?" {
@@ -392,7 +422,7 @@ items := []components.SidebarItem{
 }
 
 if a.profile != nil && a.profile.Role >= 2 {
-items = append(items, components.SidebarItem{Icon: "⚙️", Label: "Admin", ID: "admin"})
+items = append(items, components.SidebarItem{Icon: "🔧", Label: "Admin", ID: "admin"})
 }
 if a.profile != nil && a.profile.Role >= 3 {
 items = append(items, components.SidebarItem{Icon: "👑", Label: "Superadmin", ID: "superadmin"})

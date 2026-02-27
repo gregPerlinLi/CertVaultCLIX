@@ -3,7 +3,6 @@ package components
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	st "github.com/gregPerlinLi/CertVaultCLIX/internal/tui/styles"
 )
 
@@ -93,11 +92,6 @@ func (s *Sidebar) View() string {
 		icon := item.Icon
 		if icon == "" {
 			icon = "•"
-		}
-		// Use lipgloss.Width so we can pad narrower icons to 2 cells
-		iconCols := lipgloss.Width(icon)
-		if iconCols < 2 {
-			icon = icon + " "
 		}
 		label := icon + " " + item.Label
 

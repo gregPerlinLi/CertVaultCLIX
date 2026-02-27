@@ -1,6 +1,7 @@
 package components
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -18,9 +19,11 @@ type FormField struct {
 
 // Form is a multi-field form component.
 type Form struct {
-	Fields  []*FormField
-	focused int
-	title   string
+	Fields     []*FormField
+	focused    int
+	title      string
+	scrollOff  int // index of first visible field
+	maxVisible int // max fields to show (0 = show all)
 }
 
 // NewForm creates a new form with the given fields.
@@ -39,6 +42,42 @@ func NewForm(title string, fields []*FormField) Form {
 		Fields: fields,
 		title:  title,
 	}
+}
+
+// SetHeight configures the maximum number of visible fields based on available height.
+// Each field takes ~3 lines (label + input + gap). Title(2) + help(1) are reserved.
+func (f *Form) SetHeight(height int) {
+if height < 5 {
+f.maxVisible = 1
+return
+}
+// Title(2) + per-field(3) + help(1)
+available := height - 3
+n := available / 3
+if n < 1 {
+n = 1
+}
+f.maxVisible = n
+f.clampScroll()
+}
+
+func (f *Form) clampScroll() {
+if f.maxVisible <= 0 || len(f.Fields) <= f.maxVisible {
+f.scrollOff = 0
+return
+}
+if f.scrollOff > len(f.Fields)-f.maxVisible {
+f.scrollOff = len(f.Fields) - f.maxVisible
+}
+if f.scrollOff < 0 {
+f.scrollOff = 0
+}
+// Ensure focused field is visible
+if f.focused < f.scrollOff {
+f.scrollOff = f.focused
+} else if f.focused >= f.scrollOff+f.maxVisible {
+f.scrollOff = f.focused - f.maxVisible + 1
+}
 }
 
 // Value returns the value of the field at index i.
@@ -87,11 +126,13 @@ func (f *Form) Update(msg tea.Msg) tea.Cmd {
 			f.Fields[f.focused].input.Blur()
 			f.focused = (f.focused + 1) % len(f.Fields)
 			f.Fields[f.focused].input.Focus()
+			f.clampScroll()
 			return nil
 		case "shift+tab", "up":
 			f.Fields[f.focused].input.Blur()
 			f.focused = (f.focused - 1 + len(f.Fields)) % len(f.Fields)
 			f.Fields[f.focused].input.Focus()
+			f.clampScroll()
 			return nil
 		}
 	}
@@ -110,7 +151,14 @@ func (f *Form) View() string {
 		sb.WriteString("\n\n")
 	}
 
-	for i, field := range f.Fields {
+	start := f.scrollOff
+	end := len(f.Fields)
+	if f.maxVisible > 0 && end > start+f.maxVisible {
+		end = start + f.maxVisible
+	}
+
+	for i := start; i < end; i++ {
+		field := f.Fields[i]
 		label := st.NormalStyle.Render(field.Label + ":")
 		sb.WriteString(label)
 		sb.WriteString("\n")
@@ -120,6 +168,17 @@ func (f *Form) View() string {
 		} else {
 			sb.WriteString(st.InputStyle.Render(field.input.View()))
 		}
+		sb.WriteString("\n\n")
+	}
+
+	// Scroll indicator when not all fields fit
+	if f.maxVisible > 0 && len(f.Fields) > f.maxVisible {
+		shown := end - start
+		total := len(f.Fields)
+		info := st.MutedStyle.Render(
+			fmt.Sprintf("  Fields %d–%d of %d  (tab to advance)", start+1, start+shown, total),
+		)
+		sb.WriteString(info)
 		sb.WriteString("\n\n")
 	}
 

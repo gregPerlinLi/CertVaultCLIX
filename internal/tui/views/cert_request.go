@@ -57,6 +57,7 @@ func NewCertRequest(client *api.Client) CertRequest {
 func (c *CertRequest) SetSize(width, height int) {
 	c.width = width
 	c.height = height
+	c.form.SetHeight(height - 4) // 4 lines reserved for title, error, help
 }
 
 // Init initializes the form.

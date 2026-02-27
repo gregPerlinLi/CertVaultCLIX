@@ -73,7 +73,7 @@ func (t *Table) SelectedIndex() int {
 	return t.cursor
 }
 
-// Update handles keyboard events.
+// Update handles keyboard and mouse events.
 func (t *Table) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -92,19 +92,44 @@ func (t *Table) Update(msg tea.Msg) tea.Cmd {
 					t.offset++
 				}
 			}
-		case "pgup", "ctrl+u":
-			t.cursor -= t.visibleRows()
+		case "ctrl+u":
+			step := t.visibleRows()
+			if step < 1 {
+				step = 1
+			}
+			t.cursor -= step
 			if t.cursor < 0 {
 				t.cursor = 0
 			}
 			t.offset = t.cursor
-		case "pgdown", "ctrl+d":
-			t.cursor += t.visibleRows()
+		case "ctrl+d":
+			step := t.visibleRows()
+			if step < 1 {
+				step = 1
+			}
+			t.cursor += step
 			if t.cursor >= len(t.Rows) {
 				t.cursor = len(t.Rows) - 1
 			}
 			if t.offset < t.cursor-t.visibleRows()+1 {
 				t.offset = t.cursor - t.visibleRows() + 1
+			}
+		}
+	case tea.MouseMsg:
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			if t.cursor > 0 {
+				t.cursor--
+				if t.cursor < t.offset {
+					t.offset--
+				}
+			}
+		case tea.MouseButtonWheelDown:
+			if t.cursor < len(t.Rows)-1 {
+				t.cursor++
+				if t.cursor >= t.offset+t.visibleRows() {
+					t.offset++
+				}
 			}
 		}
 	}

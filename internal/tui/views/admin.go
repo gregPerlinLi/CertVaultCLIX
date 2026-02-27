@@ -230,7 +230,7 @@ func (a *Admin) View() string {
 	sb.WriteString("\n")
 	sb.WriteString(a.table.View())
 	sb.WriteString("\n")
-	sb.WriteString(tui.HelpStyle.Render("r: refresh • esc: back • PgUp/PgDn: page"))
+	sb.WriteString(tui.HelpStyle.Render("r: refresh • esc: back • [/]: prev/next page"))
 
 	if a.toast.IsVisible() {
 		sb.WriteString("\n" + a.toast.View())

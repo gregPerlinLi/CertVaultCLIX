@@ -107,6 +107,16 @@ switch msg.String() {
 case "r", "f5":
 cmd := s.spinner.Start("Refreshing...")
 return tea.Batch(cmd, s.load())
+case "[":
+if s.page > 1 {
+s.page--
+return s.load()
+}
+case "]":
+if int64(s.page*20) < s.total {
+s.page++
+return s.load()
+}
 case "d", "delete":
 sel := s.table.SelectedIndex()
 if sel >= 0 && sel < len(s.sessions) {
@@ -190,7 +200,7 @@ sb.WriteString(tui.MutedStyle.Render(total))
 sb.WriteString("\n")
 sb.WriteString(s.table.View())
 sb.WriteString("\n")
-sb.WriteString(tui.HelpStyle.Render("d: logout session • r: refresh • PgUp/PgDn: page"))
+sb.WriteString(tui.HelpStyle.Render("d: logout session • r: refresh • [/]: prev/next page"))
 
 if s.toast.IsVisible() {
 sb.WriteString("\n" + s.toast.View())

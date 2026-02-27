@@ -281,7 +281,7 @@ func (s *Superadmin) View() string {
 	sb.WriteString("\n")
 	sb.WriteString(s.table.View())
 	sb.WriteString("\n")
-	sb.WriteString(tui.HelpStyle.Render("d: force logout • r: refresh • esc: back • PgUp/PgDn: page"))
+	sb.WriteString(tui.HelpStyle.Render("d: force logout • r: refresh • esc: back • [/]: prev/next page"))
 
 	if s.toast.IsVisible() {
 		sb.WriteString("\n" + s.toast.View())
