@@ -2,6 +2,7 @@ package views
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -209,13 +210,13 @@ func (t *Tools) runTool() tea.Cmd {
 		ctx := context.Background()
 		switch mode {
 		case ToolsModeAnalyzeCert:
-			analysis, err := t.client.AnalyzeCert(ctx, content)
+			analysis, err := t.client.AnalyzeCert(ctx, base64.StdEncoding.EncodeToString([]byte(content)))
 			if err != nil {
 				return toolResultMsg{err: err.Error()}
 			}
 			return toolResultMsg{result: formatCertAnalysis(analysis, vpWidth)}
 		case ToolsModeAnalyzeKey:
-			analysis, err := t.client.AnalyzePrivKey(ctx, content, "")
+			analysis, err := t.client.AnalyzePrivKey(ctx, base64.StdEncoding.EncodeToString([]byte(content)), "")
 			if err != nil {
 				return toolResultMsg{err: err.Error()}
 			}
