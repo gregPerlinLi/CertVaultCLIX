@@ -82,17 +82,17 @@ func (c *Client) ListUserCAs(ctx context.Context, page, size int) (*PageDTO[CACe
 }
 
 // GetUserCACert gets the PEM certificate for a CA.
-func (c *Client) GetUserCACert(ctx context.Context, uuid string, chain, needRoot bool) (*CertContent, error) {
-	path := fmt.Sprintf("/api/v1/user/cert/ca/%s/cer?chain=%v&needRootCa=%v", uuid, chain, needRoot)
+func (c *Client) GetUserCACert(ctx context.Context, uuid string, chain, needRoot bool) (string, error) {
+	path := fmt.Sprintf("/api/v1/user/cert/ca/%s/cer?isChain=%v&needRootCa=%v", uuid, chain, needRoot)
 	resp, err := c.get(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("get CA cert: %w", err)
+		return "", fmt.Errorf("get CA cert: %w", err)
 	}
-	result, err := decodeResponse[CertContent](resp)
+	result, err := decodeResponse[string](resp)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return &result.Data, nil
+	return result.Data, nil
 }
 
 // ListUserSSLCerts lists SSL certs belonging to the current user.
@@ -110,16 +110,16 @@ func (c *Client) ListUserSSLCerts(ctx context.Context, page, size int) (*PageDTO
 }
 
 // GetUserSSLCert gets the PEM certificate content.
-func (c *Client) GetUserSSLCert(ctx context.Context, uuid string) (*CertContent, error) {
+func (c *Client) GetUserSSLCert(ctx context.Context, uuid string) (string, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/user/cert/ssl/%s/cer", uuid))
 	if err != nil {
-		return nil, fmt.Errorf("get SSL cert: %w", err)
+		return "", fmt.Errorf("get SSL cert: %w", err)
 	}
-	result, err := decodeResponse[CertContent](resp)
+	result, err := decodeResponse[string](resp)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return &result.Data, nil
+	return result.Data, nil
 }
 
 // GetUserSSLPrivKey retrieves the encrypted private key.

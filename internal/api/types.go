@@ -89,12 +89,6 @@ CreatedAt  string `json:"createdAt"`
 ModifiedAt string `json:"modifiedAt"`
 }
 
-// CertContent holds PEM-encoded certificate content.
-type CertContent struct {
-Certificate string `json:"certificate"`
-Chain       string `json:"chain,omitempty"`
-}
-
 // PrivKeyResponse holds an encrypted private key.
 type PrivKeyResponse struct {
 PrivateKey string `json:"privateKey"`

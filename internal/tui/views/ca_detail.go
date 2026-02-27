@@ -119,18 +119,17 @@ func (c *CADetail) startAnalysis() tea.Cmd {
 	return tea.Batch(spinCmd, func() tea.Msg {
 		ctx := context.Background()
 		var certPEM string
+		var err error
 		if isAdmin {
-			certContent, err := client.GetAdminCACert(ctx, uuid, false, false)
+			certPEM, err = client.GetAdminCACert(ctx, uuid, false, false)
 			if err != nil {
 				return inlineAnalysisMsg{err: err.Error()}
 			}
-			certPEM = certContent.Certificate
 		} else {
-			certContent, err := client.GetUserCACert(ctx, uuid, false, false)
+			certPEM, err = client.GetUserCACert(ctx, uuid, false, false)
 			if err != nil {
 				return inlineAnalysisMsg{err: err.Error()}
 			}
-			certPEM = certContent.Certificate
 		}
 		analysis, err := client.AnalyzeCert(ctx, certPEM)
 		if err != nil {

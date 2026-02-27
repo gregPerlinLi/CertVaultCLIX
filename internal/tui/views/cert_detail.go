@@ -114,11 +114,11 @@ func (c *CertDetail) startAnalysis() tea.Cmd {
 	spinCmd := c.spinner.Start("Analyzing...")
 	return tea.Batch(spinCmd, func() tea.Msg {
 		ctx := context.Background()
-		certContent, err := client.GetUserSSLCert(ctx, uuid)
+		certPEM, err := client.GetUserSSLCert(ctx, uuid)
 		if err != nil {
 			return inlineAnalysisMsg{err: err.Error()}
 		}
-		analysis, err := client.AnalyzeCert(ctx, certContent.Certificate)
+		analysis, err := client.AnalyzeCert(ctx, certPEM)
 		if err != nil {
 			return inlineAnalysisMsg{err: err.Error()}
 		}

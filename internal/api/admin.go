@@ -34,17 +34,17 @@ func (c *Client) ListAdminCAs(ctx context.Context, page, size int) (*PageDTO[CAC
 }
 
 // GetAdminCACert gets the CA certificate PEM.
-func (c *Client) GetAdminCACert(ctx context.Context, uuid string, chain, needRoot bool) (*CertContent, error) {
-	path := fmt.Sprintf("/api/v1/admin/cert/ca/%s/cer?chain=%v&needRootCa=%v", uuid, chain, needRoot)
+func (c *Client) GetAdminCACert(ctx context.Context, uuid string, chain, needRoot bool) (string, error) {
+	path := fmt.Sprintf("/api/v1/admin/cert/ca/%s/cer?isChain=%v&needRootCa=%v", uuid, chain, needRoot)
 	resp, err := c.get(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("get admin CA cert: %w", err)
+		return "", fmt.Errorf("get admin CA cert: %w", err)
 	}
-	result, err := decodeResponse[CertContent](resp)
+	result, err := decodeResponse[string](resp)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return &result.Data, nil
+	return result.Data, nil
 }
 
 // GetAdminCAPrivKey gets the CA private key.
