@@ -79,6 +79,9 @@ switch msg := msg.(type) {
 case SessionsLoadedMsg:
 s.spinner.Stop()
 if msg.Err != nil {
+if isUnauthorized(msg.Err) {
+return func() tea.Msg { return SessionExpiredMsg{} }
+}
 s.err = msg.Err.Error()
 return nil
 }
@@ -97,6 +100,9 @@ return nil
 case components.ClearToastMsg:
 s.toast.Hide()
 return nil
+
+case tea.MouseMsg:
+return s.table.Update(msg)
 
 case tea.KeyMsg:
 if s.dialog != nil {

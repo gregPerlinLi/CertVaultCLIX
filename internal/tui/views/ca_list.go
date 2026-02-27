@@ -87,6 +87,9 @@ switch msg := msg.(type) {
 case CAListLoadedMsg:
 c.spinner.Stop()
 if msg.Err != nil {
+if isUnauthorized(msg.Err) {
+return func() tea.Msg { return SessionExpiredMsg{} }
+}
 c.err = msg.Err.Error()
 return nil
 }
@@ -94,6 +97,9 @@ c.cas = msg.CAs
 c.total = msg.Total
 c.table.SetRows(c.buildRows())
 return nil
+
+case tea.MouseMsg:
+return c.table.Update(msg)
 
 case tea.KeyMsg:
 switch msg.String() {

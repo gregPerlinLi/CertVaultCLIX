@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,10 @@ import (
 	"github.com/gregPerlinLi/CertVaultCLIX/internal/version"
 	"golang.org/x/net/publicsuffix"
 )
+
+// ErrUnauthorized is returned when the server returns HTTP 401 or API code 401,
+// indicating the session has expired and the user must log in again.
+var ErrUnauthorized = errors.New("session expired: please log in again")
 
 const defaultTimeout = 30 * time.Second
 
@@ -120,9 +125,17 @@ func (c *Client) delete(ctx context.Context, path string) (*http.Response, error
 // decodeResponse decodes a JSON response into the given type.
 func decodeResponse[T any](resp *http.Response) (*ResultVO[T], error) {
 	defer resp.Body.Close()
+	// Treat HTTP 401 as session-expired regardless of body
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, ErrUnauthorized
+	}
 	var result ResultVO[T]
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	// Some API implementations return 401 in the body code field
+	if result.Code == 401 {
+		return nil, ErrUnauthorized
 	}
 	if result.Code != 200 && result.Code != 0 {
 		return &result, fmt.Errorf("API error %d: %s", result.Code, result.Msg)

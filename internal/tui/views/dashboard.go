@@ -60,13 +60,21 @@ func (d *Dashboard) fetchStats() tea.Cmd {
 
 		// Try to fetch CA count
 		cas, err := d.client.ListUserCAs(ctx, 1, 1)
-		if err == nil {
+		if err != nil {
+			if isUnauthorized(err) {
+				return SessionExpiredMsg{}
+			}
+		} else {
 			stats.CACount = int(cas.Total)
 		}
 
 		// Try to fetch SSL count
 		ssls, err := d.client.ListUserSSLCerts(ctx, 1, 1)
-		if err == nil {
+		if err != nil {
+			if isUnauthorized(err) {
+				return SessionExpiredMsg{}
+			}
+		} else {
 			stats.SSLCount = int(ssls.Total)
 		}
 

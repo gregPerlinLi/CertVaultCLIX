@@ -134,6 +134,26 @@ func (f *Form) Update(msg tea.Msg) tea.Cmd {
 			f.Fields[f.focused].input.Focus()
 			f.clampScroll()
 			return nil
+		case "ctrl+l":
+			// Clear the focused field (alternative to Ctrl+A select-all on macOS)
+			f.Fields[f.focused].input.SetValue("")
+			return nil
+		}
+	case tea.MouseMsg:
+		// Mouse wheel scrolls through form fields
+		switch msg.Button {
+		case tea.MouseButtonWheelDown:
+			f.Fields[f.focused].input.Blur()
+			f.focused = (f.focused + 1) % len(f.Fields)
+			f.Fields[f.focused].input.Focus()
+			f.clampScroll()
+			return nil
+		case tea.MouseButtonWheelUp:
+			f.Fields[f.focused].input.Blur()
+			f.focused = (f.focused - 1 + len(f.Fields)) % len(f.Fields)
+			f.Fields[f.focused].input.Focus()
+			f.clampScroll()
+			return nil
 		}
 	}
 
@@ -182,7 +202,7 @@ func (f *Form) View() string {
 		sb.WriteString("\n\n")
 	}
 
-	sb.WriteString(st.HelpStyle.Render("tab: next field • shift+tab: prev field"))
+	sb.WriteString(st.HelpStyle.Render("tab/↓: next • shift+tab/↑: prev • ctrl+l: clear field • scroll: mouse wheel"))
 
 	return sb.String()
 }

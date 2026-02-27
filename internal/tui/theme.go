@@ -41,3 +41,6 @@ ToastInfoStyle       = s.ToastInfoStyle
 
 // ExpiryStyle returns a color-coded style based on days remaining.
 var ExpiryStyle = s.ExpiryStyle
+
+// RoleStyle returns a color-coded style based on user role.
+var RoleStyle = s.RoleStyle

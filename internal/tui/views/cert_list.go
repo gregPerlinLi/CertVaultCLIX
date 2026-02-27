@@ -86,6 +86,9 @@ switch msg := msg.(type) {
 case CertListLoadedMsg:
 c.spinner.Stop()
 if msg.Err != nil {
+if isUnauthorized(msg.Err) {
+return func() tea.Msg { return SessionExpiredMsg{} }
+}
 c.err = msg.Err.Error()
 return nil
 }
@@ -93,6 +96,9 @@ c.certs = msg.Certs
 c.total = msg.Total
 c.table.SetRows(c.buildRows())
 return nil
+
+case tea.MouseMsg:
+return c.table.Update(msg)
 
 case tea.KeyMsg:
 switch msg.String() {
@@ -124,11 +130,12 @@ comment := cert.Comment
 if comment == "" {
 comment = cert.UUID
 }
+daysStr := tui.ExpiryStyle(daysLeft).Render(fmt.Sprintf("%d", daysLeft))
 rows[i] = components.Row{
 comment,
 cert.Owner,
 formatNotAfter(cert.NotAfter),
-fmt.Sprintf("%d", daysLeft),
+daysStr,
 }
 }
 return rows

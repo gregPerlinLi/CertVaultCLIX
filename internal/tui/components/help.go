@@ -46,6 +46,8 @@ func DefaultEntries() []HelpEntry {
 return []HelpEntry{
 {Key: "↑/k, ↓/j", Desc: "Move up/down in list"},
 {Key: "ctrl+u/d", Desc: "Scroll table by half-page"},
+{Key: "ctrl+l", Desc: "Clear input field"},
+{Key: "scroll/drag", Desc: "Mouse wheel navigation"},
 {Key: "[/]", Desc: "Prev/next API page"},
 {Key: "enter", Desc: "Select / confirm"},
 {Key: "esc", Desc: "Back / cancel"},
@@ -55,8 +57,9 @@ return []HelpEntry{
 {Key: "x", Desc: "Export"},
 {Key: "tab", Desc: "Next field"},
 {Key: "?", Desc: "Toggle help"},
-{Key: "q", Desc: "Quit"},
+{Key: "q", Desc: "Quit (from list/detail views)"},
 {Key: "ctrl+c", Desc: "Force quit"},
+{Key: "L (sidebar)", Desc: "Logout with confirmation"},
 }
 }
 

@@ -175,3 +175,18 @@ func ExpiryStyle(daysLeft int) lipgloss.Style {
 		return SuccessStyle
 	}
 }
+
+// RoleStyle returns a color-coded style for a user role.
+// User = green, Admin = blue/purple (secondary), Superadmin = red.
+func RoleStyle(role int) lipgloss.Style {
+	switch role {
+	case 1: // User
+		return lipgloss.NewStyle().Foreground(ColorSuccess)
+	case 2: // Admin
+		return lipgloss.NewStyle().Foreground(ColorSecondary)
+	case 3: // Superadmin
+		return lipgloss.NewStyle().Foreground(ColorDanger)
+	default:
+		return lipgloss.NewStyle().Foreground(ColorTextMuted)
+	}
+}

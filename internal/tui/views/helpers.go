@@ -1,6 +1,22 @@
 package views
 
-import "time"
+import (
+	"errors"
+	"time"
+
+	"github.com/gregPerlinLi/CertVaultCLIX/internal/api"
+)
+
+// SessionExpiredMsg is sent when any API call returns 401 Unauthorized.
+type SessionExpiredMsg struct{}
+
+// LoggedOutMsg is sent after an explicit user-initiated logout.
+type LoggedOutMsg struct{}
+
+// isUnauthorized returns true when err indicates a session expiry (HTTP 401).
+func isUnauthorized(err error) bool {
+	return err != nil && errors.Is(err, api.ErrUnauthorized)
+}
 
 // parseDaysLeft parses a date string and returns the number of days until expiry.
 // Handles multiple date formats used by the CertVault API.

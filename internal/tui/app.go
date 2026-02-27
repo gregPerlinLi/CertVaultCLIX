@@ -33,18 +33,19 @@ ViewSettings
 
 // App is the main Bubble Tea application model.
 type App struct {
-client    *api.Client
-cfg       *config.Config
-profile   *api.UserProfile
-view      ViewID
-prevView  ViewID
-width     int
-height    int
-ready     bool
-sidebar   components.Sidebar
-statusBar components.StatusBar
-help      components.Help
-toast     components.Toast
+client       *api.Client
+cfg          *config.Config
+profile      *api.UserProfile
+view         ViewID
+prevView     ViewID
+width        int
+height       int
+ready        bool
+sidebar      components.Sidebar
+statusBar    components.StatusBar
+help         components.Help
+toast        components.Toast
+logoutDialog *components.Dialog
 
 // Views
 loginView      *views.Login
@@ -93,6 +94,28 @@ return views.LoginSuccessMsg{Profile: profile}
 }
 }
 
+// doLogout calls the logout API, clears the saved session, and returns to login.
+func (a *App) doLogout() tea.Cmd {
+return func() tea.Msg {
+_ = a.client.Logout(context.Background()) // ignore error (may already be expired)
+return views.LoggedOutMsg{}
+}
+}
+
+// resetToLogin clears session state and switches to the login view.
+func (a *App) resetToLogin() tea.Cmd {
+a.client.SetSession("")
+if a.cfg != nil {
+a.cfg.Session = ""
+_ = config.Save(a.cfg)
+}
+a.profile = nil
+loginView := views.NewLogin(a.client, a.cfg)
+a.loginView = &loginView
+a.view = ViewLogin
+return a.loginView.Init()
+}
+
 // Update handles all messages.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 switch msg := msg.(type) {
@@ -136,10 +159,36 @@ if a.help.IsVisible() {
 a.help.Toggle()
 return a, nil
 }
+// Logout dialog
+if a.logoutDialog != nil {
+cmd, done := a.logoutDialog.Update(msg)
+if done {
+a.logoutDialog = nil
+}
+return a, cmd
+}
 
 case views.LoginSuccessMsg:
 a.profile = msg.Profile
 return a, a.switchToMain()
+
+case views.SessionExpiredMsg:
+// Session expired — clear saved session and go back to login
+return a, a.resetToLogin()
+
+case views.LoggedOutMsg:
+// Explicit logout — clear session and go back to login
+return a, a.resetToLogin()
+
+case components.ConfirmMsg:
+// App-level confirmation (logout dialog)
+if a.logoutDialog != nil {
+a.logoutDialog = nil
+if msg.Confirmed {
+return a, a.doLogout()
+}
+return a, nil
+}
 
 case components.ClearToastMsg:
 a.toast.Hide()
@@ -352,6 +401,10 @@ return a.superadminView.Init()
 case "settings":
 a.view = ViewSettings
 return a.settingsView.Init()
+case "logout":
+d := components.NewDialog("Logout", "Are you sure you want to log out?")
+a.logoutDialog = &d
+return nil
 }
 return nil
 }
@@ -429,6 +482,7 @@ items = append(items, components.SidebarItem{Icon: "👑", Label: "Superadmin", 
 }
 
 items = append(items, components.SidebarItem{Icon: "⚡", Label: "Settings", ID: "settings"})
+items = append(items, components.SidebarItem{Icon: "🚪", Label: "Logout", ID: "logout"})
 return items
 }
 
@@ -497,6 +551,11 @@ return view
 sidebarView := a.sidebar.View()
 contentView := a.currentContentView()
 
+// Overlay logout dialog if active
+if a.logoutDialog != nil {
+contentView = a.logoutDialog.View(a.width - 22)
+}
+
 sidebarWidth := 22
 contentWidth := a.width - sidebarWidth
 if contentWidth < 1 {
@@ -513,7 +572,7 @@ if a.help.IsVisible() {
 helpView := a.help.View()
 footer = lipgloss.PlaceHorizontal(a.width, lipgloss.Center, helpView)
 } else {
-footer = HelpStyle.Render("? help  q quit")
+footer = HelpStyle.Render("? help • q quit • L logout")
 }
 
 return fmt.Sprintf("%s\n%s\n%s", mainArea, statusBar, footer)
