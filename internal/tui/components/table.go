@@ -93,30 +93,44 @@ t.offset++
 }
 }
 case "ctrl+u":
-// Half-page scroll up
+// Half-page scroll up (vim-style: move cursor AND offset together)
 step := t.visibleRows() / 2
 if step < 1 {
 step = 1
 }
 t.cursor -= step
+t.offset -= step
 if t.cursor < 0 {
 t.cursor = 0
 }
+if t.offset < 0 {
+t.offset = 0
+}
 if t.cursor < t.offset {
-t.offset = t.cursor
+t.cursor = t.offset
 }
 case "ctrl+d":
-// Half-page scroll down
+// Half-page scroll down (vim-style: move cursor AND offset together)
 step := t.visibleRows() / 2
 if step < 1 {
 step = 1
 }
 t.cursor += step
+t.offset += step
+if len(t.Rows) > 0 {
 if t.cursor >= len(t.Rows) {
 t.cursor = len(t.Rows) - 1
 }
-if t.cursor >= t.offset+t.visibleRows() {
-t.offset = t.cursor - t.visibleRows() + 1
+maxOffset := len(t.Rows) - t.visibleRows()
+if maxOffset < 0 {
+maxOffset = 0
+}
+if t.offset > maxOffset {
+t.offset = maxOffset
+}
+if t.cursor < t.offset {
+t.cursor = t.offset
+}
 }
 }
 case tea.MouseMsg:

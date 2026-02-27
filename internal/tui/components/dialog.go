@@ -47,7 +47,12 @@ func (d *Dialog) Update(msg tea.Msg) (tea.Cmd, bool) {
 	return nil, false
 }
 
-// View renders the dialog.
+// WasConfirmed returns whether the current dialog selection is "Yes".
+// Call this after Update returns done=true to read the user's choice without
+// relying on the ConfirmMsg being dispatched through the bubbletea message loop.
+func (d *Dialog) WasConfirmed() bool {
+	return d.confirm == 0
+}
 func (d *Dialog) View(width int) string {
 	var sb strings.Builder
 

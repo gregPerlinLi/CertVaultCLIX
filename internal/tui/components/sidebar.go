@@ -3,6 +3,7 @@ package components
 import (
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	st "github.com/gregPerlinLi/CertVaultCLIX/internal/tui/styles"
 )
 
@@ -92,6 +93,12 @@ func (s *Sidebar) View() string {
 		icon := item.Icon
 		if icon == "" {
 			icon = "•"
+		}
+		// Normalize icon to exactly 2 terminal columns so all labels start at the
+		// same horizontal position regardless of which emoji is used.
+		iconVW := lipgloss.Width(icon)
+		if iconVW < 2 {
+			icon = icon + strings.Repeat(" ", 2-iconVW)
 		}
 		label := icon + " " + item.Label
 

@@ -103,6 +103,7 @@ func (f *Form) Reset() {
 		field.input.Blur()
 	}
 	f.focused = 0
+	f.scrollOff = 0
 	if len(f.Fields) > 0 {
 		f.Fields[0].input.Focus()
 	}

@@ -35,11 +35,12 @@ height  int
 // NewCAList creates a new CA list view.
 func NewCAList(client *api.Client) CAList {
 cols := []components.Column{
-{Title: "Comment", Width: 30},
-{Title: "Owner", Width: 15},
+{Title: "Comment", Width: 28},
+{Title: "Owner", Width: 12},
 {Title: "Type", Width: 8},
 {Title: "Expires", Width: 12},
-{Title: "Available", Width: 10},
+{Title: "Days Left", Width: 10},
+{Title: "Avail", Width: 6},
 }
 return CAList{
 client:  client,
@@ -134,11 +135,14 @@ comment := ca.Comment
 if comment == "" {
 comment = ca.UUID
 }
+daysLeft := parseDaysLeft(ca.NotAfter)
+daysStr := tui.ExpiryStyle(daysLeft).Render(fmt.Sprintf("%d", daysLeft))
 rows[i] = components.Row{
 comment,
 ca.Owner,
 ca.CAType(),
 formatNotAfter(ca.NotAfter),
+daysStr,
 avail,
 }
 }

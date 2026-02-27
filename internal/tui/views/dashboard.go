@@ -103,8 +103,8 @@ func (d *Dashboard) View() string {
 	if d.profile != nil {
 		sb.WriteString(tui.SubtitleStyle.Render(fmt.Sprintf("Welcome, %s!", d.profile.DisplayName)))
 		sb.WriteString("\n")
-		sb.WriteString(tui.NormalStyle.Render(fmt.Sprintf("Role: %s | Email: %s",
-			api.RoleName(d.profile.Role), d.profile.Email)))
+		roleStyled := tui.RoleStyle(d.profile.Role).Render(api.RoleName(d.profile.Role))
+		sb.WriteString(tui.NormalStyle.Render("Role: ") + roleStyled + tui.NormalStyle.Render(" | Email: "+d.profile.Email))
 		sb.WriteString("\n\n")
 	}
 

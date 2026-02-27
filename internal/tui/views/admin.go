@@ -94,8 +94,22 @@ a.users = msg.Users
 a.cas = msg.CAs
 a.total = msg.Total
 if a.mode == AdminModeUsers {
+a.table.Columns = []components.Column{
+{Title: "Username", Width: 20},
+{Title: "Display Name", Width: 25},
+{Title: "Email", Width: 28},
+{Title: "Role", Width: 12},
+}
 a.table.SetRows(a.buildUserRows())
 } else {
+a.table.Columns = []components.Column{
+{Title: "Comment", Width: 26},
+{Title: "Owner", Width: 12},
+{Title: "Type", Width: 8},
+{Title: "Expires", Width: 12},
+{Title: "Days Left", Width: 10},
+{Title: "Avail", Width: 6},
+}
 a.table.SetRows(a.buildCARows())
 }
 return nil
@@ -212,11 +226,14 @@ comment := ca.Comment
 if comment == "" {
 comment = ca.UUID
 }
+daysLeft := parseDaysLeft(ca.NotAfter)
+daysStr := tui.ExpiryStyle(daysLeft).Render(fmt.Sprintf("%d", daysLeft))
 rows[i] = components.Row{
 comment,
 ca.Owner,
 ca.CAType(),
 formatNotAfter(ca.NotAfter),
+daysStr,
 avail,
 }
 }

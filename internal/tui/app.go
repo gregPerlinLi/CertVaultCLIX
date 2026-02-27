@@ -159,13 +159,19 @@ if a.help.IsVisible() {
 a.help.Toggle()
 return a, nil
 }
-// Logout dialog
+// Logout dialog: read the user's choice directly from the dialog state
+// to avoid the race where logoutDialog is nil by the time ConfirmMsg arrives.
 if a.logoutDialog != nil {
-cmd, done := a.logoutDialog.Update(msg)
+_, done := a.logoutDialog.Update(msg)
 if done {
+confirmed := a.logoutDialog.WasConfirmed()
 a.logoutDialog = nil
+if confirmed {
+return a, a.doLogout()
 }
-return a, cmd
+return a, nil
+}
+return a, nil // re-render with updated dialog state (e.g. left/right key)
 }
 
 case views.LoginSuccessMsg:
@@ -180,15 +186,8 @@ case views.LoggedOutMsg:
 // Explicit logout — clear session and go back to login
 return a, a.resetToLogin()
 
-case components.ConfirmMsg:
-// App-level confirmation (logout dialog)
-if a.logoutDialog != nil {
-a.logoutDialog = nil
-if msg.Confirmed {
-return a, a.doLogout()
-}
-return a, nil
-}
+// NOTE: ConfirmMsg from sub-views (sessions, superadmin) is handled within those views.
+// App-level logout dialog uses WasConfirmed() directly in the KeyMsg handler above.
 
 case components.ClearToastMsg:
 a.toast.Hide()
@@ -443,17 +442,20 @@ a.settingsView = &settingsView
 items := a.buildSidebarItems()
 a.sidebar = components.NewSidebar(items)
 
-role := "User"
+roleStr := "User"
+roleInt := 1
 username := ""
 email := ""
 if a.profile != nil {
-role = api.RoleName(a.profile.Role)
+roleStr = api.RoleName(a.profile.Role)
+roleInt = a.profile.Role
 username = a.profile.Username
 email = a.profile.Email
 }
 a.statusBar = components.StatusBar{
 Username: username,
-Role:     role,
+Role:     roleStr,
+RoleInt:  roleInt,
 Server:   a.client.GetBaseURL(),
 Status:   email,
 }

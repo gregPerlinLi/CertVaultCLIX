@@ -110,6 +110,10 @@ func (t *Tools) Update(msg tea.Msg) tea.Cmd {
 				t.err = ""
 			case "ctrl+s", "ctrl+enter":
 				return t.runTool()
+			case "ctrl+l":
+				// Clear the textarea content
+				t.input.Reset()
+				return nil
 			default:
 				var cmd tea.Cmd
 				t.input, cmd = t.input.Update(msg)
@@ -237,7 +241,7 @@ func (t *Tools) View() string {
 	}
 
 	sb.WriteString("\n\n")
-	sb.WriteString(tui.HelpStyle.Render("ctrl+s: run • esc: back"))
+	sb.WriteString(tui.HelpStyle.Render("ctrl+s: run • ctrl+l: clear • esc: back"))
 	return sb.String()
 }
 
