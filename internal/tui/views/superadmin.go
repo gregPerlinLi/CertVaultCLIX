@@ -1011,6 +1011,7 @@ pairs := [][2]string{
 {"Username", sess.Username},
 {"IP Address", sess.IPAddress},
 {"Region", sess.Region},
+{"Province", sess.Province},
 {"City", sess.City},
 {"Browser", sess.Browser},
 {"OS", sess.OS},
@@ -1018,10 +1019,8 @@ pairs := [][2]string{
 {"Online", online},
 }
 for _, p := range pairs {
-sb.WriteString(tui.NormalStyle.Render(p[0] + ":"))
-sb.WriteString("  ")
-sb.WriteString(tui.MutedStyle.Render(p[1]))
-sb.WriteString("\n")
+label := tui.KeyStyle.Render(fmt.Sprintf("%-12s", p[0]+":"))
+sb.WriteString(label + " " + p[1] + "\n")
 }
 sb.WriteString("\n")
 sb.WriteString(tui.HelpStyle.Render("esc: back"))

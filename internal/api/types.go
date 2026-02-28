@@ -46,6 +46,7 @@ UUID      string `json:"uuid"`
 Username  string `json:"username"`
 IPAddress string `json:"ipAddress"`
 Region    string `json:"region"`
+Province  string `json:"province"`
 City      string `json:"city"`
 Browser   string `json:"browser"`
 OS        string `json:"os"`
