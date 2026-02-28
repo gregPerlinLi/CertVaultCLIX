@@ -48,16 +48,17 @@ func (c *Client) GetAdminCACert(ctx context.Context, uuid string, chain, needRoo
 }
 
 // GetAdminCAPrivKey gets the CA private key.
-func (c *Client) GetAdminCAPrivKey(ctx context.Context, uuid, password string) (*PrivKeyResponse, error) {
+// The API returns the private key as a base64-encoded PEM string in the data field.
+func (c *Client) GetAdminCAPrivKey(ctx context.Context, uuid, password string) (string, error) {
 	resp, err := c.post(ctx, fmt.Sprintf("/api/v1/admin/cert/ca/%s/privkey", uuid), GetPrivKeyRequest{Password: password})
 	if err != nil {
-		return nil, fmt.Errorf("get admin CA privkey: %w", err)
+		return "", fmt.Errorf("get admin CA privkey: %w", err)
 	}
-	result, err := decodeResponse[PrivKeyResponse](resp)
+	result, err := decodeResponse[string](resp)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return &result.Data, nil
+	return result.Data, nil
 }
 
 // UpdateAdminCAComment updates the CA comment.

@@ -584,7 +584,7 @@ resp, err := client.GetAdminCAPrivKey(context.Background(), uuid, password)
 if err != nil {
 return certPrivKeyMsg{err: err.Error()}
 }
-decoded, decErr := base64.StdEncoding.DecodeString(resp.PrivateKey)
+decoded, decErr := base64.StdEncoding.DecodeString(resp)
 if decErr != nil {
 return certPrivKeyMsg{err: "decode error: " + decErr.Error()}
 }
