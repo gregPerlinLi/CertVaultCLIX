@@ -1,0 +1,51 @@
+version: 2
+
+project_name: cvx
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: .
+    binary: cvx
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/gregPerlinLi/CertVaultCLIX/internal/version.Version={{.Version}}
+      - -X github.com/gregPerlinLi/CertVaultCLIX/internal/version.Commit={{.Commit}}
+      - -X github.com/gregPerlinLi/CertVaultCLIX/internal/version.BuildDate={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  draft: false
+  prerelease: auto
+  name_template: "{{ .ProjectName }} v{{ .Version }}"
