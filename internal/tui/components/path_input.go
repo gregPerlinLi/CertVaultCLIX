@@ -34,11 +34,11 @@ func (p *PathInput) Focus() { p.Input.Focus() }
 // Blur removes focus from the underlying text input.
 func (p *PathInput) Blur() { p.Input.Blur() }
 
-// SetValue sets the input value and clears any pending completion state.
+// SetValue sets the input value and recomputes completions for the new value.
 func (p *PathInput) SetValue(v string) {
 	p.Input.SetValue(v)
-	p.completions = nil
 	p.compIdx = -1
+	p.completions = p.computeCompletions(p.expandHome(v))
 }
 
 // Value returns the current input value.
@@ -48,18 +48,30 @@ func (p *PathInput) Value() string { return p.Input.Value() }
 func (p *PathInput) InputView() string { return p.Input.View() }
 
 // SuggestionsView returns a rendered list of path completions, or an empty string
-// when there are no pending suggestions.
+// when there are no pending suggestions. A sliding window of maxShow entries is
+// used so that the currently selected item (compIdx) is always visible.
 func (p *PathInput) SuggestionsView() string {
 	if len(p.completions) == 0 {
 		return ""
 	}
 	const maxShow = 8
-	var sb strings.Builder
-	limit := len(p.completions)
-	if limit > maxShow {
-		limit = maxShow
+
+	// Compute the view window so that compIdx is always inside it.
+	viewStart := 0
+	if p.compIdx >= maxShow {
+		viewStart = p.compIdx - maxShow + 1
 	}
-	for i := 0; i < limit; i++ {
+	viewEnd := viewStart + maxShow
+	if viewEnd > len(p.completions) {
+		viewEnd = len(p.completions)
+	}
+
+	var sb strings.Builder
+	if viewStart > 0 {
+		sb.WriteString(st.MutedStyle.Render(fmt.Sprintf("  ↑ %d more above", viewStart)))
+		sb.WriteString("\n")
+	}
+	for i := viewStart; i < viewEnd; i++ {
 		name := filepath.Base(p.completions[i])
 		if strings.HasSuffix(p.completions[i], string(filepath.Separator)) {
 			name += string(filepath.Separator)
@@ -71,17 +83,17 @@ func (p *PathInput) SuggestionsView() string {
 		}
 		sb.WriteString("\n")
 	}
-	if len(p.completions) > maxShow {
-		sb.WriteString(st.MutedStyle.Render(
-			fmt.Sprintf("  … and %d more", len(p.completions)-maxShow),
-		))
+	if viewEnd < len(p.completions) {
+		sb.WriteString(st.MutedStyle.Render(fmt.Sprintf("  ↓ %d more below", len(p.completions)-viewEnd)))
 		sb.WriteString("\n")
 	}
 	return sb.String()
 }
 
-// Update processes key events. Tab triggers path completion; any other key clears
-// the completion list and is forwarded to the underlying text input.
+// Update processes key events. Completions are recomputed after every keystroke so
+// the list is always visible while the user types. Tab fills the longest common
+// prefix of all candidates on the first press, then cycles through them on
+// subsequent presses. Any printable / delete key resets the cycle state.
 func (p *PathInput) Update(msg tea.Msg) tea.Cmd {
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "tab" {
 		// Already cycling — advance to the next candidate.
@@ -90,9 +102,9 @@ func (p *PathInput) Update(msg tea.Msg) tea.Cmd {
 			p.Input.SetValue(p.completions[p.compIdx])
 			return nil
 		}
-		// Compute fresh completions for the current path prefix.
-		path := p.expandHome(p.Input.Value())
-		candidates := p.computeCompletions(path)
+		// Use the live-computed list; it is always current thanks to the
+		// recomputation that happens on every non-Tab keystroke.
+		candidates := p.completions // always current
 		if len(candidates) == 0 {
 			return nil
 		}
@@ -105,6 +117,7 @@ func (p *PathInput) Update(msg tea.Msg) tea.Cmd {
 		// Multiple candidates: fill the longest common prefix, then start cycling.
 		common := longestCommonPrefix(candidates)
 		p.completions = candidates
+		path := p.expandHome(p.Input.Value())
 		if common != path {
 			p.Input.SetValue(common)
 			p.compIdx = -1
@@ -115,11 +128,12 @@ func (p *PathInput) Update(msg tea.Msg) tea.Cmd {
 		p.Input.SetValue(p.completions[0])
 		return nil
 	}
-	// Any non-Tab key resets the completion state.
-	p.completions = nil
+	// Non-Tab key: reset cycle state, forward to text input, recompute live list.
 	p.compIdx = -1
 	var cmd tea.Cmd
 	p.Input, cmd = p.Input.Update(msg)
+	// Recompute completions for the updated value so the list is always visible.
+	p.completions = p.computeCompletions(p.expandHome(p.Input.Value()))
 	return cmd
 }
 

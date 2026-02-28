@@ -22,6 +22,12 @@ const banner = `
  ╚═════╝╚══════╝╚═╝  ╚═╝   ╚═╝     ╚═══╝  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  X
 `
 
+// connRefusedHint is shown when a login attempt fails with a network-connectivity
+// error so users are guided to install and configure the CertVault server.
+const connRefusedHint = "Please install and start the CertVault server first, then\n" +
+	"set the correct server URL (ctrl+u).\n" +
+	"→ https://github.com/gregPerlinLi/CertVault"
+
 // LoginSuccessMsg is sent after a successful login.
 type LoginSuccessMsg struct {
 Profile *api.UserProfile
@@ -45,6 +51,7 @@ editingURL  bool
 loading     bool
 spinner     components.Spinner
 err         string
+hint        string // extra hint shown below the error (e.g. connection-refused guidance)
 width       int
 height      int
 }
@@ -160,6 +167,14 @@ l.loading = false
 l.spinner.Stop()
 if msg.Err != nil {
 l.err = msg.Err.Error()
+// Detect connection-refused errors and guide the user to the server.
+if strings.Contains(strings.ToLower(l.err), "connection refused") ||
+strings.Contains(strings.ToLower(l.err), "no such host") ||
+strings.Contains(strings.ToLower(l.err), "dial tcp") {
+l.hint = connRefusedHint
+} else {
+l.hint = ""
+}
 }
 return nil, false
 }
@@ -209,6 +224,7 @@ l.focused = 2
 func (l *Login) doLogin() tea.Cmd {
 l.loading = true
 l.err = ""
+l.hint = ""
 username := l.usernameIn.Value()
 password := l.passwordIn.Value()
 
@@ -306,8 +322,24 @@ sb.WriteString("\n")
 
 // Error
 if l.err != "" {
-sb.WriteString(tui.DangerStyle.Render("✗ " + l.err))
+// Wrap to formWidth so long errors don't widen the centering computation.
+wrapped := wrapText(l.err, formWidth-2, "  ")
+for i, line := range strings.Split(wrapped, "\n") {
+if i == 0 {
+sb.WriteString(tui.DangerStyle.Render("✗ " + line))
+} else {
+sb.WriteString(tui.DangerStyle.Render(line))
+}
 sb.WriteString("\n")
+}
+}
+
+// Hint (e.g. connection-refused guidance)
+if l.hint != "" {
+for _, line := range strings.Split(l.hint, "\n") {
+sb.WriteString(tui.HelpStyle.Render("  " + line))
+sb.WriteString("\n")
+}
 }
 
 // Help
@@ -315,7 +347,10 @@ sb.WriteString("\n")
 sb.WriteString(tui.HelpStyle.Render("tab/↓ next • shift+tab/↑ prev • enter select • ctrl+u server URL • ctrl+q quit"))
 
 content := sb.String()
-// Center the content
+// Center the content.
+// We compute the widest "stable" line (banner / form elements) and use that for
+// horizontal centering. Lines introduced by dynamic content (error, hint, spinner)
+// are capped at formWidth so they never push the layout to the left.
 lines := strings.Split(content, "\n")
 maxW := 0
 for _, line := range lines {
@@ -323,6 +358,12 @@ w := lipgloss.Width(line)
 if w > maxW {
 maxW = w
 }
+}
+// Cap at a sane maximum (banner + padding is ~80 cols) so dynamic error text
+// that was wrapped to formWidth doesn't distort the centering.
+const maxContentWidth = 82
+if maxW > maxContentWidth {
+maxW = maxContentWidth
 }
 
 padLeft := (l.width - maxW) / 2
