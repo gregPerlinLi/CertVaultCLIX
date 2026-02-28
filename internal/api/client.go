@@ -129,6 +129,12 @@ func decodeResponse[T any](resp *http.Response) (*ResultVO[T], error) {
 	if resp.StatusCode == http.StatusUnauthorized {
 		return nil, ErrUnauthorized
 	}
+	// HTTP 204 No Content — return a zero-value success result (e.g. empty PageDTO).
+	// Code is normalised to 200 so all callers can treat it uniformly as a success.
+	if resp.StatusCode == http.StatusNoContent {
+		var zero T
+		return &ResultVO[T]{Code: 200, Data: zero}, nil
+	}
 	var result ResultVO[T]
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)

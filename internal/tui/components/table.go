@@ -189,7 +189,7 @@ sb.WriteString("\n")
 
 // Empty state
 if len(t.Rows) == 0 {
-empty := st.MutedStyle.Render("  No items.")
+empty := st.MutedStyle.Render("  No Data")
 sb.WriteString(empty)
 sb.WriteString("\n")
 }

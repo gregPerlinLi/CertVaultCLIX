@@ -109,8 +109,10 @@ func (c *Client) ListUserSSLCerts(ctx context.Context, page, size int) (*PageDTO
 }
 
 // GetUserSSLCert gets the PEM certificate content.
-func (c *Client) GetUserSSLCert(ctx context.Context, uuid string) (string, error) {
-	resp, err := c.get(ctx, fmt.Sprintf("/api/v1/user/cert/ssl/%s/cer", uuid))
+// chain=true fetches the full certificate chain; needRoot=false excludes the root CA.
+func (c *Client) GetUserSSLCert(ctx context.Context, uuid string, chain, needRoot bool) (string, error) {
+	path := fmt.Sprintf("/api/v1/user/cert/ssl/%s/cer?isChain=%v&needRootCa=%v", uuid, chain, needRoot)
+	resp, err := c.get(ctx, path)
 	if err != nil {
 		return "", fmt.Errorf("get SSL cert: %w", err)
 	}
@@ -245,4 +247,30 @@ func (c *Client) ConvertDERtoPEM(ctx context.Context, der string) (*ConvertResul
 		return nil, err
 	}
 	return &result.Data, nil
+}
+
+// CountUserSSLCerts returns the number of SSL certs owned by the current user.
+func (c *Client) CountUserSSLCerts(ctx context.Context) (int64, error) {
+resp, err := c.get(ctx, "/api/v1/user/cert/ssl/count")
+if err != nil {
+return 0, fmt.Errorf("count user SSL certs: %w", err)
+}
+result, err := decodeResponse[int64](resp)
+if err != nil {
+return 0, err
+}
+return result.Data, nil
+}
+
+// CountUserCAs returns the number of CAs bound to the current user.
+func (c *Client) CountUserCAs(ctx context.Context) (int64, error) {
+resp, err := c.get(ctx, "/api/v1/user/cert/ca/count")
+if err != nil {
+return 0, fmt.Errorf("count user CAs: %w", err)
+}
+result, err := decodeResponse[int64](resp)
+if err != nil {
+return 0, err
+}
+return result.Data, nil
 }

@@ -176,3 +176,29 @@ func (c *Client) GetUnboundUsers(ctx context.Context, uuid string, page, size in
 	}
 	return &result.Data, nil
 }
+
+// CountAdminUsers returns the total number of users (admin+).
+func (c *Client) CountAdminUsers(ctx context.Context) (int64, error) {
+resp, err := c.get(ctx, "/api/v1/admin/users/count")
+if err != nil {
+return 0, fmt.Errorf("count admin users: %w", err)
+}
+result, err := decodeResponse[int64](resp)
+if err != nil {
+return 0, err
+}
+return result.Data, nil
+}
+
+// CountAdminCAs returns the total number of CA certs (admin+).
+func (c *Client) CountAdminCAs(ctx context.Context) (int64, error) {
+resp, err := c.get(ctx, "/api/v1/admin/cert/ca/count")
+if err != nil {
+return 0, fmt.Errorf("count admin CAs: %w", err)
+}
+result, err := decodeResponse[int64](resp)
+if err != nil {
+return 0, err
+}
+return result.Data, nil
+}

@@ -144,7 +144,10 @@ return l.doLogin(), false
 l.nextField()
 return nil, false
 case "s":
-// Open server URL edit
+// Open server URL edit only when not typing in a text field.
+if l.focused == 0 || l.focused == 1 {
+	break
+}
 l.editingURL = true
 l.usernameIn.Blur()
 l.passwordIn.Blur()

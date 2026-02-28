@@ -105,3 +105,29 @@ return fmt.Errorf("delete user: %w", err)
 _, err = decodeResponse[any](resp)
 return err
 }
+
+// CountAllSSLCerts returns the total number of SSL certs (superadmin only).
+func (c *Client) CountAllSSLCerts(ctx context.Context) (int64, error) {
+resp, err := c.get(ctx, "/api/v1/superadmin/cert/ssl/count")
+if err != nil {
+return 0, fmt.Errorf("count all SSL certs: %w", err)
+}
+result, err := decodeResponse[int64](resp)
+if err != nil {
+return 0, err
+}
+return result.Data, nil
+}
+
+// CountAllCAs returns the total number of CA certs (superadmin only).
+func (c *Client) CountAllCAs(ctx context.Context) (int64, error) {
+resp, err := c.get(ctx, "/api/v1/superadmin/cert/ca/count")
+if err != nil {
+return 0, fmt.Errorf("count all CAs: %w", err)
+}
+result, err := decodeResponse[int64](resp)
+if err != nil {
+return 0, err
+}
+return result.Data, nil
+}

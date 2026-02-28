@@ -19,17 +19,26 @@ Cert *api.SSLCert
 Err  error
 }
 
+// certReqCAsMsg carries the list of available CAs for the CA selector.
+type certReqCAsMsg struct {
+cas []api.CACert
+err error
+}
+
 // CertRequest is the form for requesting a new SSL certificate.
 // It uses a viewport so the form is always scrollable — even in small terminals.
 type CertRequest struct {
-client   *api.Client
-fields   []*components.FormField
-form     components.Form
-viewport viewport.Model
-spinner  components.Spinner
-err      string
-width    int
-height   int
+client        *api.Client
+fields        []*components.FormField
+form          components.Form
+viewport      viewport.Model
+spinner       components.Spinner
+err           string
+width         int
+height        int
+// CA selector state
+availableCAs  []api.CACert
+caIdx         int // index into availableCAs; -1 means "none loaded yet"
 }
 
 // linesPerField is the number of lines one form field occupies in the viewport.
@@ -41,7 +50,7 @@ const formTitleLines = 2 // title + blank line
 // NewCertRequest creates a new cert request form.
 func NewCertRequest(client *api.Client) CertRequest {
 fields := []*components.FormField{
-{Label: "CA UUID", Placeholder: "UUID of the CA to sign this cert"},
+{Label: "CA (↑/↓ to select)", Placeholder: "Loading available CAs..."},
 {Label: "Common Name (CN)", Placeholder: "e.g. example.com"},
 {Label: "Country", Placeholder: "e.g. US"},
 {Label: "Province", Placeholder: "e.g. California"},
@@ -63,6 +72,7 @@ fields:   fields,
 form:     f,
 viewport: vp,
 spinner:  components.NewSpinner(),
+caIdx:    -1,
 }
 }
 
@@ -80,13 +90,27 @@ c.viewport.Height = vpHeight
 c.refreshViewport()
 }
 
-// Init initializes the form.
+// Init initializes the form and fetches available CAs.
 func (c *CertRequest) Init() tea.Cmd {
 c.form.Reset()
 c.err = ""
+c.caIdx = -1
+c.availableCAs = nil
 c.viewport.GotoTop()
 c.refreshViewport()
-return textinput.Blink
+return tea.Batch(textinput.Blink, c.fetchCAs())
+}
+
+// fetchCAs loads all available CAs (up to 200) for the selector.
+func (c *CertRequest) fetchCAs() tea.Cmd {
+client := c.client
+return func() tea.Msg {
+page, err := client.ListUserCAs(context.Background(), 1, 200)
+if err != nil {
+return certReqCAsMsg{err: err}
+}
+return certReqCAsMsg{cas: page.List}
+}
 }
 
 // refreshViewport updates the viewport content and scrolls to show the focused field.
@@ -102,12 +126,70 @@ offset = 0
 c.viewport.SetYOffset(offset)
 }
 
+// caDisplayLabel returns "comment (short-uuid)" for the currently selected CA.
+func (c *CertRequest) caDisplayLabel() string {
+if len(c.availableCAs) == 0 {
+return ""
+}
+ca := c.availableCAs[c.caIdx]
+label := ca.Comment
+if label == "" {
+label = ca.UUID
+}
+if len(ca.UUID) > 8 {
+label += " (" + ca.UUID[:8] + "...)"
+}
+return label
+}
+
+// selectedCaUUID returns the UUID of the currently selected CA.
+func (c *CertRequest) selectedCaUUID() string {
+if c.caIdx < 0 || c.caIdx >= len(c.availableCAs) {
+return ""
+}
+return c.availableCAs[c.caIdx].UUID
+}
+
 // Update handles messages.
 func (c *CertRequest) Update(msg tea.Msg) tea.Cmd {
 switch msg := msg.(type) {
+case certReqCAsMsg:
+if msg.err == nil && len(msg.cas) > 0 {
+c.availableCAs = msg.cas
+c.caIdx = 0
+c.form.SetValue(0, c.caDisplayLabel())
+c.refreshViewport()
+} else if msg.err == nil {
+c.form.Fields[0].Placeholder = "No CAs available"
+}
+return nil
+
 case tea.KeyMsg:
 if c.spinner.IsActive() {
 return c.spinner.Update(msg)
+}
+// When field 0 (CA selector) is focused, intercept up/down to cycle selections.
+if c.form.FocusedIndex() == 0 && len(c.availableCAs) > 0 {
+switch msg.String() {
+case "up", "k":
+if c.caIdx > 0 {
+c.caIdx--
+} else {
+c.caIdx = len(c.availableCAs) - 1
+}
+c.form.SetValue(0, c.caDisplayLabel())
+c.refreshViewport()
+return nil
+case "down", "j":
+if c.caIdx < len(c.availableCAs)-1 {
+c.caIdx++
+} else {
+c.caIdx = 0
+}
+c.form.SetValue(0, c.caDisplayLabel())
+c.refreshViewport()
+return nil
+}
 }
 switch msg.String() {
 case "enter":
@@ -119,6 +201,16 @@ formCmd := c.form.Update(msg)
 c.refreshViewport()
 return formCmd
 default:
+// Don't let the user type into the CA selector field.
+if c.form.FocusedIndex() == 0 {
+switch msg.String() {
+case "tab", "shift+tab":
+formCmd := c.form.Update(msg)
+c.refreshViewport()
+return formCmd
+}
+return nil
+}
 formCmd := c.form.Update(msg)
 c.refreshViewport()
 return formCmd
@@ -147,7 +239,7 @@ return spinCmd
 
 func (c *CertRequest) submit() tea.Cmd {
 c.err = ""
-caUUID := c.form.Value(0)
+caUUID := c.selectedCaUUID()
 cn := c.form.Value(1)
 country := c.form.Value(2)
 province := c.form.Value(3)
@@ -160,7 +252,7 @@ expireDaysStr := c.form.Value(9)
 comment := c.form.Value(10)
 
 if cn == "" || caUUID == "" {
-c.err = "CN and CA UUID are required"
+c.err = "CN and CA are required"
 return nil
 }
 
@@ -228,8 +320,10 @@ scrollInfo := ""
 if pct >= 0 && pct <= 1 {
 scrollInfo = fmt.Sprintf(" [%.0f%%]", pct*100)
 }
-sb.WriteString(tui.HelpStyle.Render(
-"tab/↓: next field • shift+tab/↑: prev • enter (last): submit • scroll: mouse wheel" + scrollInfo,
-))
+helpLine := "tab/↓: next field • shift+tab/↑: prev • enter (last): submit • scroll: mouse wheel"
+if c.form.FocusedIndex() == 0 {
+helpLine = "↑/↓: select CA • tab: next field • enter (last): submit"
+}
+sb.WriteString(tui.HelpStyle.Render(helpLine + scrollInfo))
 return sb.String()
 }
