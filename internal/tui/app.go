@@ -131,35 +131,20 @@ a.updateSizes()
 return a, nil
 
 case tea.KeyMsg:
-// Global quit: ctrl+c always; 'q' only when not editing text
+// Global quit: ctrl+c always quits; ctrl+q quits from all views without text input.
 if msg.String() == "ctrl+c" {
 return a, tea.Quit
 }
-if msg.String() == "q" {
-switch a.view {
-case ViewLogin, ViewDashboard, ViewCAList, ViewCADetail, ViewCertList, ViewCertDetail, ViewSessions:
+if msg.String() == "ctrl+q" {
 return a, tea.Quit
-case ViewTools:
-if a.toolsView != nil && a.toolsView.IsAtRoot() {
-return a, tea.Quit
-}
-case ViewAdmin:
-if a.adminView != nil && a.adminView.IsAtRoot() {
-return a, tea.Quit
-}
-case ViewSuperadmin:
-if a.superadminView != nil && a.superadminView.IsAtRoot() {
-return a, tea.Quit
-}
-}
 }
 // Toggle help
 if msg.String() == "?" {
 a.help.Toggle()
 return a, nil
 }
-// Logout shortcut
-if msg.String() == "L" && a.view != ViewLogin && a.logoutDialog == nil {
+// Logout shortcut: ctrl+l (avoids collision with text input fields).
+if msg.String() == "ctrl+l" && a.view != ViewLogin && a.logoutDialog == nil {
 d := components.NewDialog("Logout", "Are you sure you want to log out?")
 a.logoutDialog = &d
 return a, nil
@@ -621,7 +606,7 @@ if a.help.IsVisible() {
 helpView := a.help.View()
 footer = lipgloss.PlaceHorizontal(a.width, lipgloss.Center, helpView)
 } else {
-footer = HelpStyle.Render("? help • q quit • L logout")
+footer = HelpStyle.Render("? help • ctrl+q quit • ctrl+l logout")
 }
 
 return fmt.Sprintf("%s\n%s\n%s", mainArea, statusBar, footer)

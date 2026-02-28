@@ -18,13 +18,16 @@ tui "github.com/gregPerlinLi/CertVaultCLIX/internal/tui/styles"
 type caDetailMode int
 
 const (
-caDetailNormal     caDetailMode = iota
-caDetailAnalysis               // showing analysis result
-caDetailViewCert               // viewing cert PEM content
-caDetailChainSel               // selecting chain type before view/export
-caDetailExportPath             // entering export file path
-caDetailBindUser               // admin: entering username to bind
-caDetailBoundList              // admin: listing/unbinding bound users
+caDetailNormal       caDetailMode = iota
+caDetailAnalysis                  // showing analysis result
+caDetailViewCert                  // viewing cert PEM content
+caDetailChainSel                  // selecting chain type before view/export
+caDetailExportPath                // entering export file path
+caDetailBindSel                   // admin: selecting unbound user to bind
+caDetailBoundList                 // admin: listing/unbinding bound users
+caDetailPrivKeyPass               // admin: entering password for private key
+caDetailViewPrivKey               // admin: viewing private key PEM content
+caDetailExportPriv                // admin: entering export path for private key
 )
 
 // caDetailAction is what follows chain selection: view or export.
@@ -52,13 +55,23 @@ chainAction caDetailAction
 // export
 exportInput textinput.Model
 exportMsg   string
-// admin bind/unbind
-bindInput   textinput.Model
-bindMsg     string
+// admin bind: unbound user selector
+unboundUsers  []api.AdminUser
+unboundTotal  int64
+unboundPage   int
+unboundTable  components.Table
+bindMsg       string
+// admin bound users list
 boundUsers  []api.AdminUser
 boundTotal  int64
 boundPage   int
 boundTable  components.Table
+// private key
+passInput   textinput.Model
+privKeyMode caDetailAction
+privContent string
+privExport  textinput.Model
+privMsg     string
 width       int
 height      int
 }
@@ -70,24 +83,36 @@ vp := viewport.New(80, 20)
 ei := textinput.New()
 ei.Placeholder = "e.g. /home/user/ca.pem"
 ei.CharLimit = 512
-bi := textinput.New()
-bi.Placeholder = "Username to bind"
-bi.CharLimit = 128
-cols := []components.Column{
+pi := textinput.New()
+pi.Placeholder = "Enter your login password"
+pi.EchoMode = textinput.EchoPassword
+pi.CharLimit = 256
+pe := textinput.New()
+pe.Placeholder = "e.g. /home/user/ca.key"
+pe.CharLimit = 512
+ubCols := []components.Column{
+{Title: "Username", Width: 22},
+{Title: "Display Name", Width: 26},
+{Title: "Email", Width: 30},
+}
+bCols := []components.Column{
 {Title: "Username", Width: 22},
 {Title: "Display Name", Width: 26},
 {Title: "Email", Width: 30},
 }
 return CADetail{
-CA:          ca,
-client:      client,
-isAdmin:     isAdmin,
-spinner:     components.NewSpinner(),
-resultVP:    vp,
-exportInput: ei,
-bindInput:   bi,
-boundPage:   1,
-boundTable:  components.NewTable(cols, 10),
+CA:           ca,
+client:       client,
+isAdmin:      isAdmin,
+spinner:      components.NewSpinner(),
+resultVP:     vp,
+exportInput:  ei,
+passInput:    pi,
+privExport:   pe,
+unboundPage:  1,
+unboundTable: components.NewTable(ubCols, 10),
+boundPage:    1,
+boundTable:   components.NewTable(bCols, 10),
 }
 }
 
@@ -101,6 +126,7 @@ if vpH < 4 {
 vpH = 4
 }
 c.resultVP.Height = vpH
+c.unboundTable.SetSize(width, height-8)
 c.boundTable.SetSize(width, height-8)
 }
 
@@ -184,19 +210,29 @@ var cmd tea.Cmd
 c.exportInput, cmd = c.exportInput.Update(msg)
 return cmd
 }
-case caDetailBindUser:
+case caDetailBindSel:
 switch msg.String() {
 case "esc":
 c.mode = caDetailNormal
-c.bindInput.Blur()
 c.bindMsg = ""
 return nil
 case "enter":
-return c.doBindUser()
+idx := c.unboundTable.SelectedIndex()
+if idx >= 0 && idx < len(c.unboundUsers) {
+return c.doBindUser(c.unboundUsers[idx].Username)
+}
+case "[":
+if c.unboundPage > 1 {
+c.unboundPage--
+return c.loadUnboundUsers()
+}
+case "]":
+if int64(c.unboundPage*20) < c.unboundTotal {
+c.unboundPage++
+return c.loadUnboundUsers()
+}
 default:
-var cmd tea.Cmd
-c.bindInput, cmd = c.bindInput.Update(msg)
-return cmd
+return c.unboundTable.Update(msg)
 }
 case caDetailBoundList:
 switch msg.String() {
@@ -221,6 +257,51 @@ return c.loadBoundUsers()
 default:
 return c.boundTable.Update(msg)
 }
+case caDetailPrivKeyPass:
+switch msg.String() {
+case "esc":
+c.mode = caDetailNormal
+c.passInput.Blur()
+c.passInput.SetValue("")
+return nil
+case "enter":
+return c.fetchPrivKey()
+default:
+var cmd tea.Cmd
+c.passInput, cmd = c.passInput.Update(msg)
+return cmd
+}
+case caDetailViewPrivKey:
+switch msg.String() {
+case "esc":
+c.mode = caDetailNormal
+c.privContent = ""
+c.privMsg = ""
+return nil
+case "e":
+c.mode = caDetailExportPriv
+c.privExport.SetValue("")
+c.privExport.Focus()
+c.privMsg = ""
+return textinput.Blink
+case "up", "k", "down", "j", "pgup", "pgdown":
+var vpCmd tea.Cmd
+c.resultVP, vpCmd = c.resultVP.Update(msg)
+return vpCmd
+}
+case caDetailExportPriv:
+switch msg.String() {
+case "esc":
+c.mode = caDetailViewPrivKey
+c.privExport.Blur()
+return nil
+case "enter":
+return c.doExportPrivKey()
+default:
+var cmd tea.Cmd
+c.privExport, cmd = c.privExport.Update(msg)
+return cmd
+}
 case caDetailNormal:
 switch msg.String() {
 case "a":
@@ -235,11 +316,10 @@ c.chainSelIdx = 0
 c.mode = caDetailChainSel
 case "b":
 if c.isAdmin {
-c.mode = caDetailBindUser
-c.bindInput.SetValue("")
-c.bindInput.Focus()
+c.mode = caDetailBindSel
+c.unboundPage = 1
 c.bindMsg = ""
-return textinput.Blink
+return c.loadUnboundUsers()
 }
 case "u":
 if c.isAdmin {
@@ -247,16 +327,36 @@ c.mode = caDetailBoundList
 c.boundPage = 1
 return c.loadBoundUsers()
 }
+case "k":
+if c.isAdmin {
+c.privKeyMode = caDetailActionView
+c.passInput.SetValue("")
+c.passInput.Focus()
+c.privMsg = ""
+c.mode = caDetailPrivKeyPass
+return textinput.Blink
+}
+case "K":
+if c.isAdmin {
+c.privKeyMode = caDetailActionExport
+c.passInput.SetValue("")
+c.passInput.Focus()
+c.privMsg = ""
+c.mode = caDetailPrivKeyPass
+return textinput.Blink
+}
 }
 }
 case tea.MouseMsg:
 switch c.mode {
-case caDetailAnalysis, caDetailViewCert:
+case caDetailAnalysis, caDetailViewCert, caDetailViewPrivKey:
 var vpCmd tea.Cmd
 c.resultVP, vpCmd = c.resultVP.Update(msg)
 return vpCmd
 case caDetailBoundList:
 return c.boundTable.Update(msg)
+case caDetailBindSel:
+return c.unboundTable.Update(msg)
 }
 case inlineAnalysisMsg:
 c.spinner.Stop()
@@ -286,13 +386,39 @@ c.exportMsg = "✓ Saved to " + msg.path
 c.exportInput.Blur()
 c.mode = caDetailViewCert
 return nil
+case certPrivKeyMsg:
+c.spinner.Stop()
+if msg.err != "" {
+c.privMsg = "✗ " + msg.err
+c.mode = caDetailNormal
+return nil
+}
+c.privContent = msg.content
+if c.privKeyMode == caDetailActionExport {
+c.mode = caDetailExportPriv
+c.privExport.SetValue("")
+c.privExport.Focus()
+c.privMsg = ""
+return textinput.Blink
+}
+c.mode = caDetailViewPrivKey
+c.resultVP.SetContent(msg.content)
+c.resultVP.GotoTop()
+return nil
+case certPrivExportedMsg:
+c.spinner.Stop()
+c.privMsg = "✓ Saved to " + msg.path
+c.privExport.Blur()
+c.mode = caDetailViewPrivKey
+return nil
 case caBindMsg:
 c.spinner.Stop()
 if msg.err != "" {
 c.bindMsg = "✗ " + msg.err
 } else {
 c.bindMsg = "✓ Bound successfully"
-c.bindInput.SetValue("")
+// Refresh unbound list.
+return c.loadUnboundUsers()
 }
 return nil
 case caUnbindMsg:
@@ -315,15 +441,34 @@ rows[i] = components.Row{u.Username, u.DisplayName, u.Email}
 }
 c.boundTable.SetRows(rows)
 return nil
+case caUnboundUsersMsg:
+c.spinner.Stop()
+if msg.err != "" {
+c.bindMsg = "✗ " + msg.err
+return nil
+}
+c.unboundUsers = msg.users
+c.unboundTotal = msg.total
+rows := make([]components.Row, len(msg.users))
+for i, u := range msg.users {
+rows[i] = components.Row{u.Username, u.DisplayName, u.Email}
+}
+c.unboundTable.SetRows(rows)
+return nil
 }
 return c.spinner.Update(msg)
 }
 
-// --- message types for bind/unbind ---
+// --- message types ---
 
 type caBindMsg struct{ err string }
 type caUnbindMsg struct{ err string }
 type caBoundUsersMsg struct {
+users []api.AdminUser
+total int64
+err   string
+}
+type caUnboundUsersMsg struct {
 users []api.AdminUser
 total int64
 err   string
@@ -362,17 +507,17 @@ if path == "" {
 c.exportMsg = "Path cannot be empty"
 return nil
 }
-if c.certContent != "" {
-if err := writeFile(path, []byte(c.certContent)); err != nil {
-c.exportMsg = "Export failed: " + err.Error()
-return nil
-}
-c.exportMsg = "✓ Saved to " + path
 c.exportInput.Blur()
-c.mode = caDetailViewCert
-return nil
+content := c.certContent
+if content != "" {
+spinCmd := c.spinner.Start("Saving...")
+return tea.Batch(spinCmd, func() tea.Msg {
+if err := writeFile(path, []byte(content)); err != nil {
+return certContentMsg{err: "export failed: " + err.Error()}
 }
-// Fetch then save.
+return certExportedMsg{path: path}
+})
+}
 opt := certChainOptions[c.chainSelIdx]
 uuid := c.CA.UUID
 client := c.client
@@ -413,14 +558,11 @@ var certPEM string
 var err error
 if isAdmin {
 certPEM, err = client.GetAdminCACert(ctx, uuid, false, false)
-if err != nil {
-return inlineAnalysisMsg{err: err.Error()}
-}
 } else {
 certPEM, err = client.GetUserCACert(ctx, uuid, false, false)
+}
 if err != nil {
 return inlineAnalysisMsg{err: err.Error()}
-}
 }
 analysis, err := client.AnalyzeCert(ctx, certPEM)
 if err != nil {
@@ -430,12 +572,44 @@ return inlineAnalysisMsg{result: formatCertAnalysis(analysis, vpWidth)}
 })
 }
 
-func (c *CADetail) doBindUser() tea.Cmd {
-username := strings.TrimSpace(c.bindInput.Value())
-if username == "" {
-c.bindMsg = "Username cannot be empty"
+func (c *CADetail) fetchPrivKey() tea.Cmd {
+password := c.passInput.Value()
+uuid := c.CA.UUID
+client := c.client
+c.passInput.Blur()
+c.passInput.SetValue("")
+spinCmd := c.spinner.Start("Fetching private key...")
+return tea.Batch(spinCmd, func() tea.Msg {
+resp, err := client.GetAdminCAPrivKey(context.Background(), uuid, password)
+if err != nil {
+return certPrivKeyMsg{err: err.Error()}
+}
+decoded, decErr := base64.StdEncoding.DecodeString(resp.PrivateKey)
+if decErr != nil {
+return certPrivKeyMsg{err: "decode error: " + decErr.Error()}
+}
+return certPrivKeyMsg{content: string(decoded)}
+})
+}
+
+func (c *CADetail) doExportPrivKey() tea.Cmd {
+path := strings.TrimSpace(c.privExport.Value())
+if path == "" {
+c.privMsg = "Path cannot be empty"
 return nil
 }
+c.privExport.Blur()
+content := c.privContent
+spinCmd := c.spinner.Start("Saving private key...")
+return tea.Batch(spinCmd, func() tea.Msg {
+if err := writeFile(path, []byte(content)); err != nil {
+return certPrivKeyMsg{err: "export failed: " + err.Error()}
+}
+return certPrivExportedMsg{path: path}
+})
+}
+
+func (c *CADetail) doBindUser(username string) tea.Cmd {
 uuid := c.CA.UUID
 client := c.client
 spinCmd := c.spinner.Start("Binding user...")
@@ -475,6 +649,20 @@ return caBoundUsersMsg{users: result.List, total: result.Total}
 })
 }
 
+func (c *CADetail) loadUnboundUsers() tea.Cmd {
+uuid := c.CA.UUID
+page := c.unboundPage
+client := c.client
+spinCmd := c.spinner.Start("Loading unbound users...")
+return tea.Batch(spinCmd, func() tea.Msg {
+result, err := client.GetUnboundUsers(context.Background(), uuid, page, 20)
+if err != nil {
+return caUnboundUsersMsg{err: err.Error()}
+}
+return caUnboundUsersMsg{users: result.List, total: result.Total}
+})
+}
+
 // View renders the CA detail.
 func (c *CADetail) View() string {
 if c.CA == nil {
@@ -490,10 +678,16 @@ case caDetailChainSel:
 return c.viewChainSelector()
 case caDetailExportPath:
 return c.viewExportPath()
-case caDetailBindUser:
-return c.viewBindUser()
+case caDetailBindSel:
+return c.viewBindSel()
 case caDetailBoundList:
 return c.viewBoundList()
+case caDetailPrivKeyPass:
+return c.viewPrivKeyPass()
+case caDetailViewPrivKey:
+return c.viewPrivKey()
+case caDetailExportPriv:
+return c.viewExportPriv()
 }
 
 ca := c.CA
@@ -529,10 +723,16 @@ label := tui.KeyStyle.Render(fmt.Sprintf("%-22s", row.label+":"))
 sb.WriteString(label + " " + row.value + "\n")
 }
 
+if c.privMsg != "" {
+sb.WriteString("\n")
+sb.WriteString(tui.DangerStyle.Render(c.privMsg))
+sb.WriteString("\n")
+}
+
 sb.WriteString("\n")
 helpKeys := "a: analyze • v: view cert • e: export cert • esc: back"
 if c.isAdmin {
-helpKeys = "a: analyze • v: view cert • e: export cert • b: bind user • u: bound users • esc: back"
+helpKeys = "a: analyze • v: view cert • e: export cert • k: view privkey • K: export privkey • b: bind user • u: bound users • esc: back"
 }
 sb.WriteString(tui.HelpStyle.Render(helpKeys))
 return sb.String()
@@ -540,7 +740,7 @@ return sb.String()
 
 func (c *CADetail) viewAnalysis() string {
 var sb strings.Builder
-sb.WriteString(tui.TitleStyle.Render("�� CA Certificate Analysis"))
+sb.WriteString(tui.TitleStyle.Render("🔐 CA Certificate Analysis"))
 sb.WriteString("\n\n")
 
 if c.spinner.IsActive() {
@@ -576,6 +776,11 @@ if c.resultVP.TotalLineCount() > c.resultVP.Height {
 pct := int(c.resultVP.ScrollPercent() * 100)
 sb.WriteString(tui.MutedStyle.Render(fmt.Sprintf(" %d%%", pct)))
 }
+sb.WriteString("\n")
+}
+
+if c.exportMsg != "" {
+sb.WriteString(tui.SuccessStyle.Render(c.exportMsg))
 sb.WriteString("\n")
 }
 
@@ -622,18 +827,24 @@ sb.WriteString(tui.DangerStyle.Render(c.exportMsg))
 }
 sb.WriteString("\n")
 }
+if c.spinner.IsActive() {
+sb.WriteString(c.spinner.View())
+sb.WriteString("\n")
+}
 sb.WriteString(tui.HelpStyle.Render("enter: save • esc: back"))
 return sb.String()
 }
 
-func (c *CADetail) viewBindUser() string {
+func (c *CADetail) viewBindSel() string {
 var sb strings.Builder
-sb.WriteString(tui.TitleStyle.Render("🔐 Bind User to CA"))
+sb.WriteString(tui.TitleStyle.Render("🔐 Bind User to CA — Select User"))
 sb.WriteString("\n\n")
-sb.WriteString(tui.NormalStyle.Render("Enter the username to grant access to this CA:"))
-sb.WriteString("\n")
-sb.WriteString(tui.InputFocusStyle.Width(c.width - 4).Render(c.bindInput.View()))
-sb.WriteString("\n\n")
+
+if c.spinner.IsActive() {
+sb.WriteString(c.spinner.View())
+return sb.String()
+}
+
 if c.bindMsg != "" {
 if strings.HasPrefix(c.bindMsg, "✓") {
 sb.WriteString(tui.SuccessStyle.Render(c.bindMsg))
@@ -642,11 +853,13 @@ sb.WriteString(tui.DangerStyle.Render(c.bindMsg))
 }
 sb.WriteString("\n")
 }
-if c.spinner.IsActive() {
-sb.WriteString(c.spinner.View())
+
+total := fmt.Sprintf("Total: %d | Page: %d", c.unboundTotal, c.unboundPage)
+sb.WriteString(tui.MutedStyle.Render(total))
 sb.WriteString("\n")
-}
-sb.WriteString(tui.HelpStyle.Render("enter: bind • esc: back"))
+sb.WriteString(c.unboundTable.View())
+sb.WriteString("\n")
+sb.WriteString(tui.HelpStyle.Render("enter: bind selected • [/]: prev/next page • esc: back"))
 return sb.String()
 }
 
@@ -671,5 +884,75 @@ sb.WriteString("\n")
 sb.WriteString(c.boundTable.View())
 sb.WriteString("\n")
 sb.WriteString(tui.HelpStyle.Render("d: unbind selected • [/]: prev/next page • esc: back"))
+return sb.String()
+}
+
+func (c *CADetail) viewPrivKeyPass() string {
+var sb strings.Builder
+action := "View"
+if c.privKeyMode == caDetailActionExport {
+action = "Export"
+}
+sb.WriteString(tui.TitleStyle.Render(fmt.Sprintf("🔑 %s CA Private Key — Authentication", action)))
+sb.WriteString("\n\n")
+sb.WriteString(tui.NormalStyle.Render("Enter your account password to decrypt the private key:"))
+sb.WriteString("\n")
+sb.WriteString(tui.InputFocusStyle.Width(c.width - 4).Render(c.passInput.View()))
+sb.WriteString("\n\n")
+if c.spinner.IsActive() {
+sb.WriteString(c.spinner.View())
+sb.WriteString("\n")
+}
+sb.WriteString(tui.HelpStyle.Render("enter: confirm • esc: back"))
+return sb.String()
+}
+
+func (c *CADetail) viewPrivKey() string {
+var sb strings.Builder
+sb.WriteString(tui.TitleStyle.Render("🔑 CA Certificate Private Key"))
+sb.WriteString("\n\n")
+
+if c.spinner.IsActive() {
+sb.WriteString(c.spinner.View())
+sb.WriteString("\n")
+} else {
+sb.WriteString(c.resultVP.View())
+if c.resultVP.TotalLineCount() > c.resultVP.Height {
+pct := int(c.resultVP.ScrollPercent() * 100)
+sb.WriteString(tui.MutedStyle.Render(fmt.Sprintf(" %d%%", pct)))
+}
+sb.WriteString("\n")
+}
+
+if c.privMsg != "" {
+sb.WriteString(tui.SuccessStyle.Render(c.privMsg))
+sb.WriteString("\n")
+}
+
+sb.WriteString(tui.HelpStyle.Render("↑/↓: scroll • e: export to file • esc: back"))
+return sb.String()
+}
+
+func (c *CADetail) viewExportPriv() string {
+var sb strings.Builder
+sb.WriteString(tui.TitleStyle.Render("🔑 Export CA Private Key"))
+sb.WriteString("\n\n")
+sb.WriteString(tui.NormalStyle.Render("Enter the file path to save the private key:"))
+sb.WriteString("\n")
+sb.WriteString(tui.InputFocusStyle.Width(c.width - 4).Render(c.privExport.View()))
+sb.WriteString("\n\n")
+if c.privMsg != "" {
+if strings.HasPrefix(c.privMsg, "✓") {
+sb.WriteString(tui.SuccessStyle.Render(c.privMsg))
+} else {
+sb.WriteString(tui.DangerStyle.Render(c.privMsg))
+}
+sb.WriteString("\n")
+}
+if c.spinner.IsActive() {
+sb.WriteString(c.spinner.View())
+sb.WriteString("\n")
+}
+sb.WriteString(tui.HelpStyle.Render("enter: save • esc: back"))
 return sb.String()
 }

@@ -143,6 +143,12 @@ func decodeResponse[T any](resp *http.Response) (*ResultVO[T], error) {
 	if result.Code == 401 {
 		return nil, ErrUnauthorized
 	}
+	// Some API implementations return 204 in the body code field for empty results.
+	// Treat as success with zero-value data.
+	if result.Code == 204 {
+		var zero T
+		return &ResultVO[T]{Code: 200, Data: zero}, nil
+	}
 	if result.Code != 200 && result.Code != 0 {
 		return &result, fmt.Errorf("API error %d: %s", result.Code, result.Msg)
 	}

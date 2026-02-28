@@ -20,11 +20,14 @@ tui "github.com/gregPerlinLi/CertVaultCLIX/internal/tui/styles"
 type certDetailMode int
 
 const (
-certDetailNormal    certDetailMode = iota
-certDetailAnalysis                 // showing analysis result
-certDetailViewCert                 // viewing cert PEM content
-certDetailChainSel                 // selecting chain type before view/export
-certDetailExportPath               // entering export path
+certDetailNormal      certDetailMode = iota
+certDetailAnalysis                   // showing analysis result
+certDetailViewCert                   // viewing cert PEM content
+certDetailChainSel                   // selecting chain type before view/export
+certDetailExportPath                 // entering export file path
+certDetailPrivKeyPass                // entering password for private key
+certDetailViewPrivKey                // viewing private key PEM content
+certDetailExportPriv                 // entering export path for private key
 )
 
 // chainTypeOption describes a certificate chain option.
@@ -58,14 +61,20 @@ resultVP     viewport.Model
 hasResult    bool
 analysisErr  string
 // cert content view
-certContent  string // decoded PEM content
-chainSelIdx  int
-chainAction  certDetailAction
+certContent string // decoded PEM content
+chainSelIdx int
+chainAction certDetailAction
 // export path input
-exportInput  textinput.Model
-exportMsg    string
-width        int
-height       int
+exportInput textinput.Model
+exportMsg   string
+// private key
+passInput   textinput.Model
+privKeyMode certDetailAction // view or export
+privContent string
+privExport  textinput.Model
+privMsg     string
+width       int
+height      int
 }
 
 // NewCertDetail creates a new SSL cert detail view.
@@ -74,12 +83,21 @@ vp := viewport.New(80, 20)
 ei := textinput.New()
 ei.Placeholder = "e.g. /home/user/cert.pem"
 ei.CharLimit = 512
+pi := textinput.New()
+pi.Placeholder = "Enter your login password"
+pi.EchoMode = textinput.EchoPassword
+pi.CharLimit = 256
+pe := textinput.New()
+pe.Placeholder = "e.g. /home/user/key.pem"
+pe.CharLimit = 512
 return CertDetail{
-Cert:        cert,
-client:      client,
-spinner:     components.NewSpinner(),
-resultVP:    vp,
+Cert:       cert,
+client:     client,
+spinner:    components.NewSpinner(),
+resultVP:   vp,
 exportInput: ei,
+passInput:  pi,
+privExport: pe,
 }
 }
 
@@ -98,13 +116,8 @@ c.resultVP.Height = vpH
 // Init does nothing.
 func (c *CertDetail) Init() tea.Cmd { return nil }
 
-// IsAnalysisMode returns true when the inline analysis result is being shown.
-func (c *CertDetail) IsAnalysisMode() bool {
-return c.mode == certDetailAnalysis ||
-c.mode == certDetailViewCert ||
-c.mode == certDetailChainSel ||
-c.mode == certDetailExportPath
-}
+// IsAnalysisMode returns true when any sub-mode is active (prevents outer esc handling).
+func (c *CertDetail) IsAnalysisMode() bool { return c.mode != certDetailNormal }
 
 // Update handles messages.
 func (c *CertDetail) Update(msg tea.Msg) tea.Cmd {
@@ -133,7 +146,6 @@ c.mode = certDetailNormal
 c.certContent = ""
 return nil
 case "e":
-// Switch to export path input.
 c.mode = certDetailExportPath
 c.exportInput.SetValue("")
 c.exportInput.Focus()
@@ -162,7 +174,6 @@ opt := certChainOptions[c.chainSelIdx]
 if c.chainAction == certDetailActionView {
 return c.fetchAndViewCert(opt.chain, opt.needRoot)
 }
-// export: ask for path
 c.mode = certDetailExportPath
 c.exportInput.SetValue("")
 c.exportInput.Focus()
@@ -182,6 +193,51 @@ var cmd tea.Cmd
 c.exportInput, cmd = c.exportInput.Update(msg)
 return cmd
 }
+case certDetailPrivKeyPass:
+switch msg.String() {
+case "esc":
+c.mode = certDetailNormal
+c.passInput.Blur()
+c.passInput.SetValue("")
+return nil
+case "enter":
+return c.fetchPrivKey()
+default:
+var cmd tea.Cmd
+c.passInput, cmd = c.passInput.Update(msg)
+return cmd
+}
+case certDetailViewPrivKey:
+switch msg.String() {
+case "esc":
+c.mode = certDetailNormal
+c.privContent = ""
+c.privMsg = ""
+return nil
+case "e":
+c.mode = certDetailExportPriv
+c.privExport.SetValue("")
+c.privExport.Focus()
+c.privMsg = ""
+return textinput.Blink
+case "up", "k", "down", "j", "pgup", "pgdown":
+var vpCmd tea.Cmd
+c.resultVP, vpCmd = c.resultVP.Update(msg)
+return vpCmd
+}
+case certDetailExportPriv:
+switch msg.String() {
+case "esc":
+c.mode = certDetailViewPrivKey
+c.privExport.Blur()
+return nil
+case "enter":
+return c.doExportPrivKey()
+default:
+var cmd tea.Cmd
+c.privExport, cmd = c.privExport.Update(msg)
+return cmd
+}
 case certDetailNormal:
 switch msg.String() {
 case "a":
@@ -194,10 +250,24 @@ case "e":
 c.chainAction = certDetailActionExport
 c.chainSelIdx = 0
 c.mode = certDetailChainSel
+case "k":
+c.privKeyMode = certDetailActionView
+c.passInput.SetValue("")
+c.passInput.Focus()
+c.privMsg = ""
+c.mode = certDetailPrivKeyPass
+return textinput.Blink
+case "K":
+c.privKeyMode = certDetailActionExport
+c.passInput.SetValue("")
+c.passInput.Focus()
+c.privMsg = ""
+c.mode = certDetailPrivKeyPass
+return textinput.Blink
 }
 }
 case tea.MouseMsg:
-if c.mode == certDetailAnalysis || c.mode == certDetailViewCert {
+if c.mode == certDetailAnalysis || c.mode == certDetailViewCert || c.mode == certDetailViewPrivKey {
 var vpCmd tea.Cmd
 c.resultVP, vpCmd = c.resultVP.Update(msg)
 return vpCmd
@@ -224,6 +294,37 @@ c.mode = certDetailViewCert
 c.resultVP.SetContent(msg.content)
 c.resultVP.GotoTop()
 return nil
+case certPrivKeyMsg:
+c.spinner.Stop()
+if msg.err != "" {
+c.privMsg = "✗ " + msg.err
+c.mode = certDetailNormal
+return nil
+}
+c.privContent = msg.content
+if c.privKeyMode == certDetailActionExport {
+c.mode = certDetailExportPriv
+c.privExport.SetValue("")
+c.privExport.Focus()
+c.privMsg = ""
+return textinput.Blink
+}
+c.mode = certDetailViewPrivKey
+c.resultVP.SetContent(msg.content)
+c.resultVP.GotoTop()
+return nil
+case certExportedMsg:
+c.spinner.Stop()
+c.exportMsg = "✓ Saved to " + msg.path
+c.exportInput.Blur()
+c.mode = certDetailViewCert
+return nil
+case certPrivExportedMsg:
+c.spinner.Stop()
+c.privMsg = "✓ Saved to " + msg.path
+c.privExport.Blur()
+c.mode = certDetailViewPrivKey
+return nil
 }
 return c.spinner.Update(msg)
 }
@@ -233,6 +334,18 @@ type certContentMsg struct {
 content string
 err     string
 }
+
+// certPrivKeyMsg carries a decoded private key PEM.
+type certPrivKeyMsg struct {
+content string
+err     string
+}
+
+// certExportedMsg signals a successful cert export.
+type certExportedMsg struct{ path string }
+
+// certPrivExportedMsg signals a successful private key export.
+type certPrivExportedMsg struct{ path string }
 
 func (c *CertDetail) fetchAndViewCert(chain, needRoot bool) tea.Cmd {
 uuid := c.Cert.UUID
@@ -252,15 +365,45 @@ return certContentMsg{content: string(decoded)}
 })
 }
 
+func (c *CertDetail) fetchPrivKey() tea.Cmd {
+password := c.passInput.Value()
+uuid := c.Cert.UUID
+client := c.client
+c.passInput.Blur()
+c.passInput.SetValue("")
+spinCmd := c.spinner.Start("Fetching private key...")
+return tea.Batch(spinCmd, func() tea.Msg {
+resp, err := client.GetUserSSLPrivKey(context.Background(), uuid, password)
+if err != nil {
+return certPrivKeyMsg{err: err.Error()}
+}
+decoded, decErr := base64.StdEncoding.DecodeString(resp.PrivateKey)
+if decErr != nil {
+return certPrivKeyMsg{err: "decode error: " + decErr.Error()}
+}
+return certPrivKeyMsg{content: string(decoded)}
+})
+}
+
 func (c *CertDetail) doExport() tea.Cmd {
 path := strings.TrimSpace(c.exportInput.Value())
 if path == "" {
 c.exportMsg = "Path cannot be empty"
 return nil
 }
+c.exportInput.Blur()
 content := c.certContent
-if content == "" {
-// Need to fetch first — get chain option then export.
+if content != "" {
+// Content already fetched — write asynchronously to avoid blocking UI.
+spinCmd := c.spinner.Start("Saving...")
+return tea.Batch(spinCmd, func() tea.Msg {
+if err := writeFile(path, []byte(content)); err != nil {
+return certContentMsg{err: "export failed: " + err.Error()}
+}
+return certExportedMsg{path: path}
+})
+}
+// Need to fetch then save.
 opt := certChainOptions[c.chainSelIdx]
 uuid := c.Cert.UUID
 client := c.client
@@ -281,18 +424,23 @@ return certContentMsg{err: writeErr.Error()}
 return certExportedMsg{path: path}
 })
 }
-if err := writeFile(path, []byte(content)); err != nil {
-c.exportMsg = "Export failed: " + err.Error()
-return nil
-}
-c.exportMsg = "✓ Saved to " + path
-c.exportInput.Blur()
-c.mode = certDetailViewCert
-return nil
-}
 
-// certExportedMsg signals a successful export when content was fetched during export.
-type certExportedMsg struct{ path string }
+func (c *CertDetail) doExportPrivKey() tea.Cmd {
+path := strings.TrimSpace(c.privExport.Value())
+if path == "" {
+c.privMsg = "Path cannot be empty"
+return nil
+}
+c.privExport.Blur()
+content := c.privContent
+spinCmd := c.spinner.Start("Saving private key...")
+return tea.Batch(spinCmd, func() tea.Msg {
+if err := writeFile(path, []byte(content)); err != nil {
+return certPrivKeyMsg{err: "export failed: " + err.Error()}
+}
+return certPrivExportedMsg{path: path}
+})
+}
 
 // writeFile creates parent directories and writes data to path.
 func writeFile(path string, data []byte) error {
@@ -336,6 +484,12 @@ case certDetailChainSel:
 return c.viewChainSelector()
 case certDetailExportPath:
 return c.viewExportPath()
+case certDetailPrivKeyPass:
+return c.viewPrivKeyPass()
+case certDetailViewPrivKey:
+return c.viewPrivKey()
+case certDetailExportPriv:
+return c.viewExportPriv()
 }
 
 cert := c.Cert
@@ -366,8 +520,14 @@ label := tui.KeyStyle.Render(fmt.Sprintf("%-22s", row.label+":"))
 sb.WriteString(label + " " + row.value + "\n")
 }
 
+if c.privMsg != "" {
 sb.WriteString("\n")
-sb.WriteString(tui.HelpStyle.Render("a: analyze • v: view cert • e: export cert • esc: back"))
+sb.WriteString(tui.DangerStyle.Render(c.privMsg))
+sb.WriteString("\n")
+}
+
+sb.WriteString("\n")
+sb.WriteString(tui.HelpStyle.Render("a: analyze • v: view cert • e: export cert • k: view privkey • K: export privkey • esc: back"))
 return sb.String()
 }
 
@@ -412,6 +572,11 @@ sb.WriteString(tui.MutedStyle.Render(fmt.Sprintf(" %d%%", pct)))
 sb.WriteString("\n")
 }
 
+if c.exportMsg != "" {
+sb.WriteString(tui.SuccessStyle.Render(c.exportMsg))
+sb.WriteString("\n")
+}
+
 sb.WriteString(tui.HelpStyle.Render("↑/↓: scroll • e: export to file • esc: back"))
 return sb.String()
 }
@@ -453,6 +618,80 @@ sb.WriteString(tui.SuccessStyle.Render(c.exportMsg))
 } else {
 sb.WriteString(tui.DangerStyle.Render(c.exportMsg))
 }
+sb.WriteString("\n")
+}
+if c.spinner.IsActive() {
+sb.WriteString(c.spinner.View())
+sb.WriteString("\n")
+}
+sb.WriteString(tui.HelpStyle.Render("enter: save • esc: back"))
+return sb.String()
+}
+
+func (c *CertDetail) viewPrivKeyPass() string {
+var sb strings.Builder
+action := "View"
+if c.privKeyMode == certDetailActionExport {
+action = "Export"
+}
+sb.WriteString(tui.TitleStyle.Render(fmt.Sprintf("🔑 %s Private Key — Authentication", action)))
+sb.WriteString("\n\n")
+sb.WriteString(tui.NormalStyle.Render("Enter your account password to decrypt the private key:"))
+sb.WriteString("\n")
+sb.WriteString(tui.InputFocusStyle.Width(c.width - 4).Render(c.passInput.View()))
+sb.WriteString("\n\n")
+if c.spinner.IsActive() {
+sb.WriteString(c.spinner.View())
+sb.WriteString("\n")
+}
+sb.WriteString(tui.HelpStyle.Render("enter: confirm • esc: back"))
+return sb.String()
+}
+
+func (c *CertDetail) viewPrivKey() string {
+var sb strings.Builder
+sb.WriteString(tui.TitleStyle.Render("🔑 SSL Certificate Private Key"))
+sb.WriteString("\n\n")
+
+if c.spinner.IsActive() {
+sb.WriteString(c.spinner.View())
+sb.WriteString("\n")
+} else {
+sb.WriteString(c.resultVP.View())
+if c.resultVP.TotalLineCount() > c.resultVP.Height {
+pct := int(c.resultVP.ScrollPercent() * 100)
+sb.WriteString(tui.MutedStyle.Render(fmt.Sprintf(" %d%%", pct)))
+}
+sb.WriteString("\n")
+}
+
+if c.privMsg != "" {
+sb.WriteString(tui.SuccessStyle.Render(c.privMsg))
+sb.WriteString("\n")
+}
+
+sb.WriteString(tui.HelpStyle.Render("↑/↓: scroll • e: export to file • esc: back"))
+return sb.String()
+}
+
+func (c *CertDetail) viewExportPriv() string {
+var sb strings.Builder
+sb.WriteString(tui.TitleStyle.Render("🔑 Export Private Key"))
+sb.WriteString("\n\n")
+sb.WriteString(tui.NormalStyle.Render("Enter the file path to save the private key:"))
+sb.WriteString("\n")
+sb.WriteString(tui.InputFocusStyle.Width(c.width - 4).Render(c.privExport.View()))
+sb.WriteString("\n\n")
+if c.privMsg != "" {
+if strings.HasPrefix(c.privMsg, "✓") {
+sb.WriteString(tui.SuccessStyle.Render(c.privMsg))
+} else {
+sb.WriteString(tui.DangerStyle.Render(c.privMsg))
+}
+sb.WriteString("\n")
+}
+if c.spinner.IsActive() {
+sb.WriteString(c.spinner.View())
 sb.WriteString("\n")
 }
 sb.WriteString(tui.HelpStyle.Render("enter: save • esc: back"))

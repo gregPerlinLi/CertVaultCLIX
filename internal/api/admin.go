@@ -129,29 +129,40 @@ func (c *Client) DeleteAdminCA(ctx context.Context, uuid string) error {
 	return err
 }
 
-// BindUsersToCA binds users to a CA.
-func (c *Client) BindUsersToCA(ctx context.Context, uuid string, usernames []string) error {
-	resp, err := c.post(ctx, fmt.Sprintf("/api/v1/admin/cert/ca/%s/bindUser", uuid), BindUsersRequest{Usernames: usernames})
-	if err != nil {
-		return fmt.Errorf("bind users to CA: %w", err)
+// BindUsersToCA binds a user to a CA.
+// Uses POST /api/v1/admin/cert/ca/bind/create with CABindingDTO.
+func (c *Client) BindUsersToCA(ctx context.Context, caUUID string, usernames []string) error {
+	for _, username := range usernames {
+		resp, err := c.post(ctx, "/api/v1/admin/cert/ca/bind/create", CABindingDTO{CaUUID: caUUID, Username: username})
+		if err != nil {
+			return fmt.Errorf("bind user %q to CA: %w", username, err)
+		}
+		if _, err = decodeResponse[any](resp); err != nil {
+			return fmt.Errorf("bind user %q to CA: %w", username, err)
+		}
 	}
-	_, err = decodeResponse[any](resp)
-	return err
+	return nil
 }
 
-// UnbindUsersFromCA unbinds users from a CA.
-func (c *Client) UnbindUsersFromCA(ctx context.Context, uuid string, usernames []string) error {
-	resp, err := c.do(ctx, "DELETE", fmt.Sprintf("/api/v1/admin/cert/ca/%s/bindUser", uuid), BindUsersRequest{Usernames: usernames})
-	if err != nil {
-		return fmt.Errorf("unbind users from CA: %w", err)
+// UnbindUsersFromCA unbinds a user from a CA.
+// Uses POST /api/v1/admin/cert/ca/bind/delete with CABindingDTO.
+func (c *Client) UnbindUsersFromCA(ctx context.Context, caUUID string, usernames []string) error {
+	for _, username := range usernames {
+		resp, err := c.post(ctx, "/api/v1/admin/cert/ca/bind/delete", CABindingDTO{CaUUID: caUUID, Username: username})
+		if err != nil {
+			return fmt.Errorf("unbind user %q from CA: %w", username, err)
+		}
+		if _, err = decodeResponse[any](resp); err != nil {
+			return fmt.Errorf("unbind user %q from CA: %w", username, err)
+		}
 	}
-	_, err = decodeResponse[any](resp)
-	return err
+	return nil
 }
 
 // GetBoundUsers gets users bound to a CA.
+// Uses GET /api/v1/admin/cert/ca/{uuid}/bind.
 func (c *Client) GetBoundUsers(ctx context.Context, uuid string, page, size int) (*PageDTO[AdminUser], error) {
-	path := fmt.Sprintf("/api/v1/admin/cert/ca/%s/bindUser?page=%d&size=%d", uuid, page, size)
+	path := fmt.Sprintf("/api/v1/admin/cert/ca/%s/bind?page=%d&limit=%d", uuid, page, size)
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("get bound users: %w", err)
@@ -164,8 +175,9 @@ func (c *Client) GetBoundUsers(ctx context.Context, uuid string, page, size int)
 }
 
 // GetUnboundUsers gets users not yet bound to a CA.
+// Uses GET /api/v1/admin/cert/ca/{uuid}/bind/not.
 func (c *Client) GetUnboundUsers(ctx context.Context, uuid string, page, size int) (*PageDTO[AdminUser], error) {
-	path := fmt.Sprintf("/api/v1/admin/cert/ca/%s/unboundUser?page=%d&size=%d", uuid, page, size)
+	path := fmt.Sprintf("/api/v1/admin/cert/ca/%s/bind/not?page=%d&limit=%d", uuid, page, size)
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("get unbound users: %w", err)

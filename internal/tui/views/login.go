@@ -143,11 +143,8 @@ return l.doLogin(), false
 }
 l.nextField()
 return nil, false
-case "s":
-// Open server URL edit only when not typing in a text field.
-if l.focused == 0 || l.focused == 1 {
-	break
-}
+case "ctrl+u":
+// Open server URL edit (Ctrl+U, safe to use anywhere).
 l.editingURL = true
 l.usernameIn.Blur()
 l.passwordIn.Blur()
@@ -263,7 +260,7 @@ sb.WriteString(tui.HelpStyle.Render("  enter: confirm • esc: cancel"))
 sb.WriteString("\n\n")
 } else {
 sb.WriteString(tui.MutedStyle.Render("Server: " + serverURL))
-sb.WriteString(tui.HelpStyle.Render("  [s] change"))
+sb.WriteString(tui.HelpStyle.Render("  [ctrl+u] change"))
 sb.WriteString("\n\n")
 }
 
@@ -315,7 +312,7 @@ sb.WriteString("\n")
 
 // Help
 sb.WriteString("\n")
-sb.WriteString(tui.HelpStyle.Render("tab/↓ next • shift+tab/↑ prev • enter select • s server URL • q quit"))
+sb.WriteString(tui.HelpStyle.Render("tab/↓ next • shift+tab/↑ prev • enter select • ctrl+u server URL • ctrl+q quit"))
 
 content := sb.String()
 // Center the content
