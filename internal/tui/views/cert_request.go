@@ -39,6 +39,8 @@ height        int
 // CA selector state
 availableCAs  []api.CACert
 caIdx         int // index into availableCAs; -1 means "none loaded yet"
+// Algorithm selector (field 7).
+algoIdx int
 }
 
 // linesPerField is the number of lines one form field occupies in the viewport.
@@ -57,7 +59,7 @@ fields := []*components.FormField{
 {Label: "City", Placeholder: "e.g. San Francisco"},
 {Label: "Organization", Placeholder: "e.g. Acme Corp"},
 {Label: "SANs", Placeholder: "Comma-separated: example.com,*.example.com"},
-{Label: "Algorithm", Placeholder: "RSA, EC, or ED25519"},
+{Label: "Algorithm (↑/↓ to select)", Placeholder: ""},
 {Label: "Key Size", Placeholder: "2048/4096 (RSA) • 256/384 (EC) • leave empty for ED25519"},
 {Label: "Expire Days", Placeholder: "e.g. 365"},
 {Label: "Comment", Placeholder: "Optional comment"},
@@ -66,7 +68,7 @@ fields := []*components.FormField{
 f := components.NewForm("📜 Request SSL Certificate", fields)
 vp := viewport.New(80, 20)
 vp.SetContent(f.View())
-return CertRequest{
+r := CertRequest{
 client:   client,
 fields:   fields,
 form:     f,
@@ -74,6 +76,8 @@ viewport: vp,
 spinner:  components.NewSpinner(),
 caIdx:    -1,
 }
+r.form.SetValue(7, certAlgos[0])
+return r
 }
 
 // SetSize updates dimensions.
@@ -95,7 +99,9 @@ func (c *CertRequest) Init() tea.Cmd {
 c.form.Reset()
 c.err = ""
 c.caIdx = -1
+c.algoIdx = 0
 c.availableCAs = nil
+c.form.SetValue(7, certAlgos[0])
 c.viewport.GotoTop()
 c.refreshViewport()
 return tea.Batch(textinput.Blink, c.fetchCAs())
@@ -168,8 +174,9 @@ case tea.KeyMsg:
 if c.spinner.IsActive() {
 return c.spinner.Update(msg)
 }
-// When field 0 (CA selector) is focused, intercept up/down to cycle selections.
-if c.form.FocusedIndex() == 0 && len(c.availableCAs) > 0 {
+focused := c.form.FocusedIndex()
+// Field 0: CA selector — intercept up/down to cycle selections.
+if focused == 0 && len(c.availableCAs) > 0 {
 switch msg.String() {
 case "up", "k":
 if c.caIdx > 0 {
@@ -191,9 +198,29 @@ c.refreshViewport()
 return nil
 }
 }
+// Field 7: Algorithm selector.
+if focused == 7 {
+switch msg.String() {
+case "up", "k":
+c.algoIdx = (c.algoIdx - 1 + len(certAlgos)) % len(certAlgos)
+c.form.SetValue(7, certAlgos[c.algoIdx])
+c.refreshViewport()
+return nil
+case "down", "j":
+c.algoIdx = (c.algoIdx + 1) % len(certAlgos)
+c.form.SetValue(7, certAlgos[c.algoIdx])
+c.refreshViewport()
+return nil
+case "tab", "shift+tab", "enter":
+formCmd := c.form.Update(msg)
+c.refreshViewport()
+return formCmd
+}
+return nil
+}
 switch msg.String() {
 case "enter":
-if c.form.FocusedIndex() == len(c.fields)-1 {
+if focused == len(c.fields)-1 {
 return c.submit()
 }
 // Fall through to form to advance to next field
@@ -202,7 +229,7 @@ c.refreshViewport()
 return formCmd
 default:
 // Don't let the user type into the CA selector field.
-if c.form.FocusedIndex() == 0 {
+if focused == 0 {
 switch msg.String() {
 case "tab", "shift+tab":
 formCmd := c.form.Update(msg)
@@ -246,7 +273,7 @@ province := c.form.Value(3)
 city := c.form.Value(4)
 org := c.form.Value(5)
 sansStr := c.form.Value(6)
-algo := c.form.Value(7)
+algo := certAlgos[c.algoIdx]
 keySizeStr := c.form.Value(8)
 expireDaysStr := c.form.Value(9)
 comment := c.form.Value(10)
@@ -272,10 +299,6 @@ fmt.Sscanf(keySizeStr, "%d", &keySize)
 
 expireDays := 365
 fmt.Sscanf(expireDaysStr, "%d", &expireDays)
-
-if algo == "" {
-algo = "RSA"
-}
 
 req := api.RequestSSLCertRequest{
 CaUUID:             caUUID,
@@ -321,8 +344,11 @@ if pct >= 0 && pct <= 1 {
 scrollInfo = fmt.Sprintf(" [%.0f%%]", pct*100)
 }
 helpLine := "tab/↓: next field • shift+tab/↑: prev • enter (last): submit • scroll: mouse wheel"
-if c.form.FocusedIndex() == 0 {
+switch c.form.FocusedIndex() {
+case 0:
 helpLine = "↑/↓: select CA • tab: next field • enter (last): submit"
+case 7:
+helpLine = "↑/↓: select algorithm • tab: next field • enter (last): submit"
 }
 sb.WriteString(tui.HelpStyle.Render(helpLine + scrollInfo))
 return sb.String()

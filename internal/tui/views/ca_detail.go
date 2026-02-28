@@ -53,7 +53,7 @@ certContent string
 chainSelIdx int
 chainAction caDetailAction
 // export
-exportInput textinput.Model
+exportInput components.PathInput
 exportMsg   string
 // admin bind: unbound user selector
 unboundUsers  []api.AdminUser
@@ -70,7 +70,7 @@ boundTable  components.Table
 passInput   textinput.Model
 privKeyMode caDetailAction
 privContent string
-privExport  textinput.Model
+privExport  components.PathInput
 privMsg     string
 width       int
 height      int
@@ -80,16 +80,12 @@ height      int
 // Pass isAdmin=true when used inside the Admin view (uses admin API endpoints).
 func NewCADetail(ca *api.CACert, client *api.Client, isAdmin bool) CADetail {
 vp := viewport.New(80, 20)
-ei := textinput.New()
-ei.Placeholder = "e.g. /home/user/ca.pem"
-ei.CharLimit = 512
+ei := components.NewPathInput("e.g. /home/user/ca.pem", 512)
 pi := textinput.New()
 pi.Placeholder = "Enter your login password"
 pi.EchoMode = textinput.EchoPassword
 pi.CharLimit = 256
-pe := textinput.New()
-pe.Placeholder = "e.g. /home/user/ca.key"
-pe.CharLimit = 512
+pe := components.NewPathInput("e.g. /home/user/ca.key", 512)
 ubCols := []components.Column{
 {Title: "Username", Width: 22},
 {Title: "Display Name", Width: 26},
@@ -206,8 +202,7 @@ return nil
 case "enter":
 return c.doExportCA()
 default:
-var cmd tea.Cmd
-c.exportInput, cmd = c.exportInput.Update(msg)
+cmd := c.exportInput.Update(msg)
 return cmd
 }
 case caDetailBindSel:
@@ -298,8 +293,7 @@ return nil
 case "enter":
 return c.doExportPrivKey()
 default:
-var cmd tea.Cmd
-c.privExport, cmd = c.privExport.Update(msg)
+cmd := c.privExport.Update(msg)
 return cmd
 }
 case caDetailNormal:
@@ -817,8 +811,12 @@ sb.WriteString(tui.TitleStyle.Render("🔐 Export CA Certificate"))
 sb.WriteString("\n\n")
 sb.WriteString(tui.NormalStyle.Render("Enter the file path to save the certificate:"))
 sb.WriteString("\n")
-sb.WriteString(tui.InputFocusStyle.Width(c.width - 4).Render(c.exportInput.View()))
-sb.WriteString("\n\n")
+sb.WriteString(tui.InputFocusStyle.Width(c.width - 4).Render(c.exportInput.InputView()))
+sb.WriteString("\n")
+if s := c.exportInput.SuggestionsView(); s != "" {
+sb.WriteString(s)
+}
+sb.WriteString("\n")
 if c.exportMsg != "" {
 if strings.HasPrefix(c.exportMsg, "✓") {
 sb.WriteString(tui.SuccessStyle.Render(c.exportMsg))
@@ -831,7 +829,7 @@ if c.spinner.IsActive() {
 sb.WriteString(c.spinner.View())
 sb.WriteString("\n")
 }
-sb.WriteString(tui.HelpStyle.Render("enter: save • esc: back"))
+sb.WriteString(tui.HelpStyle.Render("tab: autocomplete • enter: save • esc: back"))
 return sb.String()
 }
 
@@ -939,8 +937,12 @@ sb.WriteString(tui.TitleStyle.Render("🔑 Export CA Private Key"))
 sb.WriteString("\n\n")
 sb.WriteString(tui.NormalStyle.Render("Enter the file path to save the private key:"))
 sb.WriteString("\n")
-sb.WriteString(tui.InputFocusStyle.Width(c.width - 4).Render(c.privExport.View()))
-sb.WriteString("\n\n")
+sb.WriteString(tui.InputFocusStyle.Width(c.width - 4).Render(c.privExport.InputView()))
+sb.WriteString("\n")
+if s := c.privExport.SuggestionsView(); s != "" {
+sb.WriteString(s)
+}
+sb.WriteString("\n")
 if c.privMsg != "" {
 if strings.HasPrefix(c.privMsg, "✓") {
 sb.WriteString(tui.SuccessStyle.Render(c.privMsg))
@@ -953,6 +955,6 @@ if c.spinner.IsActive() {
 sb.WriteString(c.spinner.View())
 sb.WriteString("\n")
 }
-sb.WriteString(tui.HelpStyle.Render("enter: save • esc: back"))
+sb.WriteString(tui.HelpStyle.Render("tab: autocomplete • enter: save • esc: back"))
 return sb.String()
 }

@@ -101,6 +101,10 @@ return t.Format("2006-01-02")
 return notAfter
 }
 
+// certAlgos is the ordered list of key algorithms supported when requesting
+// CA and SSL certificates. It is shared by CARequest and CertRequest.
+var certAlgos = []string{"RSA", "EC", "ED25519"}
+
 // dateFormats lists date format strings accepted by the API, in priority order.
 var dateFormats = []string{
 time.RFC3339,

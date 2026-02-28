@@ -39,20 +39,24 @@ height       int
 // Parent CA selector state (-1 means "None / Root CA").
 availableCAs []api.CACert
 parentIdx    int
+// Allow Sub-CA toggle (field 1).
+allowSubCa bool
+// Algorithm selector (field 8).
+algoIdx int
 }
 
 // NewCARequest creates a new CA request form.
 func NewCARequest(client *api.Client) CARequest {
 fields := []*components.FormField{
 {Label: "Parent CA (↑/↓ to select)", Placeholder: "Loading CAs..."},
-{Label: "Allow Sub-CA", Placeholder: "true or false (enable intermediate CA)"},
+{Label: "Allow Sub-CA (↑=true/↓=false/space: toggle)", Placeholder: ""},
 {Label: "Common Name (CN)", Placeholder: "e.g. My Root CA"},
 {Label: "Country", Placeholder: "e.g. CN"},
 {Label: "Province", Placeholder: "e.g. Guangdong"},
 {Label: "City", Placeholder: "e.g. Canton"},
 {Label: "Organization", Placeholder: "e.g. Acme Corp"},
 {Label: "Org Unit", Placeholder: "e.g. IT Department"},
-{Label: "Algorithm", Placeholder: "RSA, EC, or ED25519"},
+{Label: "Algorithm (↑/↓ to select)", Placeholder: ""},
 {Label: "Key Size", Placeholder: "2048/4096 (RSA) • 256/384 (EC) • leave empty for ED25519"},
 {Label: "Expire Days", Placeholder: "e.g. 3650"},
 {Label: "Comment", Placeholder: "Optional comment"},
@@ -60,7 +64,7 @@ fields := []*components.FormField{
 f := components.NewForm("🔒 Request CA Certificate", fields)
 vp := viewport.New(80, 20)
 vp.SetContent(f.View())
-return CARequest{
+r := CARequest{
 client:    client,
 fields:    fields,
 form:      f,
@@ -68,6 +72,9 @@ viewport:  vp,
 spinner:   components.NewSpinner(),
 parentIdx: -1, // -1 = None (Root CA)
 }
+r.form.SetValue(1, "false")
+r.form.SetValue(8, certAlgos[0])
+return r
 }
 
 // SetSize updates dimensions.
@@ -89,7 +96,11 @@ c.form.Reset()
 c.err = ""
 c.parentIdx = -1
 c.availableCAs = nil
+c.allowSubCa = false
+c.algoIdx = 0
 c.form.SetValue(0, "None (Root CA)")
+c.form.SetValue(1, "false")
+c.form.SetValue(8, certAlgos[0])
 c.viewport.GotoTop()
 c.refreshViewport()
 return tea.Batch(textinput.Blink, c.fetchCAs())
@@ -159,8 +170,9 @@ case tea.KeyMsg:
 if c.spinner.IsActive() {
 return c.spinner.Update(msg)
 }
-// When field 0 (Parent CA selector) is focused, intercept up/down to cycle.
-if c.form.FocusedIndex() == 0 {
+focused := c.form.FocusedIndex()
+// Field 0: Parent CA selector — intercept up/down to cycle.
+if focused == 0 {
 switch msg.String() {
 case "up", "k":
 // Cycle backwards: None(-1) → last CA → ... → first CA → None
@@ -185,7 +197,7 @@ c.parentIdx = -1
 c.form.SetValue(0, c.parentCaDisplayLabel())
 c.refreshViewport()
 return nil
-case "tab", "shift+tab":
+case "tab", "shift+tab", "enter":
 formCmd := c.form.Update(msg)
 c.refreshViewport()
 return formCmd
@@ -193,9 +205,58 @@ return formCmd
 // Block free-text editing of the CA selector field.
 return nil
 }
+// Field 1: Allow Sub-CA toggle.
+if focused == 1 {
+switch msg.String() {
+case "up", "k":
+c.allowSubCa = true
+c.form.SetValue(1, "true")
+c.refreshViewport()
+return nil
+case "down", "j":
+c.allowSubCa = false
+c.form.SetValue(1, "false")
+c.refreshViewport()
+return nil
+case " ":
+c.allowSubCa = !c.allowSubCa
+if c.allowSubCa {
+c.form.SetValue(1, "true")
+} else {
+c.form.SetValue(1, "false")
+}
+c.refreshViewport()
+return nil
+case "tab", "shift+tab", "enter":
+formCmd := c.form.Update(msg)
+c.refreshViewport()
+return formCmd
+}
+return nil
+}
+// Field 8: Algorithm selector.
+if focused == 8 {
+switch msg.String() {
+case "up", "k":
+c.algoIdx = (c.algoIdx - 1 + len(certAlgos)) % len(certAlgos)
+c.form.SetValue(8, certAlgos[c.algoIdx])
+c.refreshViewport()
+return nil
+case "down", "j":
+c.algoIdx = (c.algoIdx + 1) % len(certAlgos)
+c.form.SetValue(8, certAlgos[c.algoIdx])
+c.refreshViewport()
+return nil
+case "tab", "shift+tab", "enter":
+formCmd := c.form.Update(msg)
+c.refreshViewport()
+return formCmd
+}
+return nil
+}
 switch msg.String() {
 case "enter":
-if c.form.FocusedIndex() == len(c.fields)-1 {
+if focused == len(c.fields)-1 {
 return c.submit()
 }
 formCmd := c.form.Update(msg)
@@ -229,14 +290,13 @@ return c.spinner.Update(msg)
 func (c *CARequest) submit() tea.Cmd {
 c.err = ""
 parentCaUUID := c.selectedParentUUID()
-allowSubCaStr := strings.ToLower(strings.TrimSpace(c.form.Value(1)))
 cn := c.form.Value(2)
 country := c.form.Value(3)
 province := c.form.Value(4)
 city := c.form.Value(5)
 org := c.form.Value(6)
 ou := c.form.Value(7)
-algo := c.form.Value(8)
+algo := certAlgos[c.algoIdx]
 keySizeStr := c.form.Value(9)
 expireDaysStr := c.form.Value(10)
 comment := c.form.Value(11)
@@ -246,8 +306,6 @@ c.err = "Common Name is required"
 return nil
 }
 
-allowSubCa := allowSubCaStr == "true" || allowSubCaStr == "yes" || allowSubCaStr == "1"
-
 keySize := 0
 if keySizeStr != "" {
 fmt.Sscanf(keySizeStr, "%d", &keySize)
@@ -256,9 +314,6 @@ fmt.Sscanf(keySizeStr, "%d", &keySize)
 expireDays := 3650
 fmt.Sscanf(expireDaysStr, "%d", &expireDays)
 
-if algo == "" {
-algo = "RSA"
-}
 if keySize == 0 && (algo == "RSA" || algo == "EC") {
 if algo == "RSA" {
 keySize = 2048
@@ -269,7 +324,7 @@ keySize = 256
 
 req := api.RequestCACertRequest{
 CaUUID:             parentCaUUID,
-AllowSubCa:         allowSubCa,
+AllowSubCa:         c.allowSubCa,
 Algorithm:          algo,
 KeySize:            keySize,
 CommonName:         cn,
@@ -310,8 +365,13 @@ if pct >= 0 && pct <= 1 {
 scrollInfo = fmt.Sprintf(" [%.0f%%]", pct*100)
 }
 helpLine := "tab/↓: next field • shift+tab/↑: prev • enter (last): submit • scroll: mouse wheel"
-if c.form.FocusedIndex() == 0 {
+switch c.form.FocusedIndex() {
+case 0:
 helpLine = "↑/↓: select parent CA • tab: next field • enter (last): submit"
+case 1:
+helpLine = "↑: true • ↓: false • space: toggle • tab: next field • enter (last): submit"
+case 8:
+helpLine = "↑/↓: select algorithm • tab: next field • enter (last): submit"
 }
 sb.WriteString(tui.HelpStyle.Render(helpLine + scrollInfo))
 return sb.String()
