@@ -256,6 +256,7 @@ a.view = ViewCertDetail
 return a, nil
 }
 case "n":
+a.prevView = ViewCertList
 a.view = ViewCertRequest
 return a, a.certReqView.Init()
 }
@@ -277,7 +278,7 @@ cmd = a.certDetailView.Update(msg)
 
 case ViewCertRequest:
 if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
-a.view = ViewCertList
+a.view = a.prevView
 return a, nil
 }
 cmd = a.certReqView.Update(msg)
@@ -288,7 +289,7 @@ return a, a.certListView.Init()
 
 case ViewCARequest:
 if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
-a.view = ViewCAList
+a.view = a.prevView
 return a, nil
 }
 if a.caReqView != nil {
@@ -402,9 +403,11 @@ case "cert_list":
 a.view = ViewCertList
 return a.certListView.Init()
 case "cert_request":
+a.prevView = ViewDashboard
 a.view = ViewCertRequest
 return a.certReqView.Init()
 case "ca_request":
+a.prevView = ViewDashboard
 a.view = ViewCARequest
 return a.caReqView.Init()
 case "profile":
