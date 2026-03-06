@@ -47,37 +47,37 @@ func NewForm(title string, fields []*FormField) Form {
 // SetHeight configures the maximum number of visible fields based on available height.
 // Each field takes ~3 lines (label + input + gap). Title(2) + help(1) are reserved.
 func (f *Form) SetHeight(height int) {
-if height < 5 {
-f.maxVisible = 1
-return
-}
-// Title(2) + per-field(3) + help(1)
-available := height - 3
-n := available / 3
-if n < 1 {
-n = 1
-}
-f.maxVisible = n
-f.clampScroll()
+	if height < 5 {
+		f.maxVisible = 1
+		return
+	}
+	// Title(2) + per-field(3) + help(1)
+	available := height - 3
+	n := available / 3
+	if n < 1 {
+		n = 1
+	}
+	f.maxVisible = n
+	f.clampScroll()
 }
 
 func (f *Form) clampScroll() {
-if f.maxVisible <= 0 || len(f.Fields) <= f.maxVisible {
-f.scrollOff = 0
-return
-}
-if f.scrollOff > len(f.Fields)-f.maxVisible {
-f.scrollOff = len(f.Fields) - f.maxVisible
-}
-if f.scrollOff < 0 {
-f.scrollOff = 0
-}
-// Ensure focused field is visible
-if f.focused < f.scrollOff {
-f.scrollOff = f.focused
-} else if f.focused >= f.scrollOff+f.maxVisible {
-f.scrollOff = f.focused - f.maxVisible + 1
-}
+	if f.maxVisible <= 0 || len(f.Fields) <= f.maxVisible {
+		f.scrollOff = 0
+		return
+	}
+	if f.scrollOff > len(f.Fields)-f.maxVisible {
+		f.scrollOff = len(f.Fields) - f.maxVisible
+	}
+	if f.scrollOff < 0 {
+		f.scrollOff = 0
+	}
+	// Ensure focused field is visible
+	if f.focused < f.scrollOff {
+		f.scrollOff = f.focused
+	} else if f.focused >= f.scrollOff+f.maxVisible {
+		f.scrollOff = f.focused - f.maxVisible + 1
+	}
 }
 
 // Value returns the value of the field at index i.
