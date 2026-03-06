@@ -35,6 +35,29 @@ checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
   algorithm: sha256
 
+brews:
+  - name: cvx
+    repository:
+      owner: gregPerlinLi
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/gregPerlinLi/CertVaultCLIX"
+    description: "Modern, keyboard-driven TUI client for the CertVault certificate management platform"
+    license: "Apache-2.0"
+    install: |
+      bin.install "cvx"
+    test: |
+      system "#{bin}/cvx", "version"
+
+scoops:
+  - repository:
+      owner: gregPerlinLi
+      name: scoop-bucket
+      token: "{{ .Env.SCOOP_BUCKET_GITHUB_TOKEN }}"
+    homepage: "https://github.com/gregPerlinLi/CertVaultCLIX"
+    description: "Modern, keyboard-driven TUI client for the CertVault certificate management platform"
+    license: "Apache-2.0"
+
 changelog:
   sort: asc
   filters:
