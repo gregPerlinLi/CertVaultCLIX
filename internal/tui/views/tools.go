@@ -13,8 +13,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gregPerlinLi/CertVaultCLIX/internal/api"
-	tui "github.com/gregPerlinLi/CertVaultCLIX/internal/tui/styles"
 	"github.com/gregPerlinLi/CertVaultCLIX/internal/tui/components"
+	tui "github.com/gregPerlinLi/CertVaultCLIX/internal/tui/styles"
 )
 
 // ToolsMode indicates which tool is active.
@@ -417,5 +417,5 @@ func (t *Tools) View() string {
 
 // IsAtRoot returns true when the Tools view is showing the top-level menu.
 func (t *Tools) IsAtRoot() bool {
-return t.mode == ToolsModeMenu
+	return t.mode == ToolsModeMenu
 }
