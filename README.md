@@ -19,6 +19,8 @@ users, all through a rich, color-coded TUI that adapts to your terminal size.
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
+  - [Homebrew (macOS / Linux)](#homebrew-macos--linux)
+  - [Scoop (Windows)](#scoop-windows)
   - [Download Pre-built Binary](#download-pre-built-binary)
   - [Go Install](#go-install)
   - [Build from Source](#build-from-source)
@@ -74,6 +76,19 @@ users, all through a rich, color-coded TUI that adapts to your terminal size.
 ---
 
 ## Installation
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew install gregPerlinLi/tap/cvx
+```
+
+### Scoop (Windows)
+
+```powershell
+scoop bucket add gregPerlinLi https://github.com/gregPerlinLi/scoop-bucket
+scoop install cvx
+```
 
 ### Download Pre-built Binary
 
